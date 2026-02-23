@@ -1,10 +1,14 @@
-# 🔍 Domain Reputation WebApp - OSINT Tool
+# 🔍 Dr.Check (Domain Reputation Checker) - OSINT Tool
 
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![Flask](https://img.shields.io/badge/flask-3.0.0-green.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
-**Domain Reputation WebApp** es una herramienta profesional de OSINT (Open Source Intelligence) para analizar la reputación de dominios, direcciones IP y hashes de archivos utilizando múltiples fuentes de inteligencia de amenazas.
+**Domain Reputation Checker** es una herramienta profesional de OSINT (Open Source Intelligence) para analizar la reputación de dominios, direcciones IP y hashes de archivos utilizando múltiples fuentes de inteligencia de amenazas.
+
+<img width="950" alt="image" src="https://github.com/user-attachments/assets/60b34b03-76f9-43c4-965d-36925da10c67" />
+
+
 
 ## ✨ Características Principales
 
