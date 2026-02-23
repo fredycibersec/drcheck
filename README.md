@@ -4,7 +4,7 @@
 ![Flask](https://img.shields.io/badge/flask-3.0.0-green.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
-<img width="914" height="804" alt="image" src="https://github.com/user-attachments/assets/ce5527fc-398a-44a9-98f1-558ae0772c0c" />
+<img width="500" alt="image" src="https://github.com/user-attachments/assets/ce5527fc-398a-44a9-98f1-558ae0772c0c" />
 
 
 **Domain Reputation Checker** es una herramienta profesional de OSINT (Open Source Intelligence) para analizar la reputación de dominios, direcciones IP y hashes de archivos utilizando múltiples fuentes de inteligencia de amenazas.
