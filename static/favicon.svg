@@ -1,0 +1,66 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00d4ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0099cc;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <circle cx="32" cy="32" r="30" fill="#1e2342" opacity="0.5"/>
+  
+  <!-- Shield -->
+  <path d="M 32 10 L 50 18 L 50 32 C 50 41 43 48 32 54 C 21 48 14 41 14 32 L 14 18 Z" 
+        fill="url(#shieldGrad)" 
+        filter="url(#glow)" 
+        opacity="0.9"/>
+  
+  <!-- Magnifying glass -->
+  <g transform="translate(27, 26)">
+    <circle cx="5" cy="5" r="6" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.9"/>
+    <line x1="9" y1="9" x2="13" y2="13" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+  
+  <!-- Check mark -->
+  <path d="M 29 30 L 31 32 L 35 28" 
+        fill="none" 
+        stroke="#48c774" 
+        stroke-width="1.5" 
+        stroke-linecap="round"/>
+  
+  <!-- Warning symbol -->
+  <g transform="translate(40, 40)" opacity="0.8">
+    <path d="M 0 -2.5 L 2.5 2 L -2.5 2 Z" fill="#ffdd57"/>
+    <text x="0" y="1.5" text-anchor="middle" font-family="Arial" font-size="3" font-weight="bold" fill="#0a0e27">!</text>
+  </g>
+</svg>
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="shieldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00d4ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0099cc;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Shield background -->
+  <path d="M50 10 L80 25 L80 50 Q80 75 50 90 Q20 75 20 50 L20 25 Z" 
+        fill="url(#shieldGradient)" 
+        stroke="#00d4ff" 
+        stroke-width="2"/>
+  
+  <!-- Check mark -->
+  <path d="M35 50 L45 60 L65 35" 
+        fill="none" 
+        stroke="#ffffff" 
+        stroke-width="6" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Domain Reputation Checker - OSINT Tool</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png">
+    <link rel="shortcut icon" href="/static/favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/dashboard-styles.css?v=2.1">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body data-theme="dark">
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="toast-container"></div>
+    
+    <!-- About Modal -->
+    <div id="aboutModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Sobre esta Herramienta</h2>
+                <button class="modal-close" id="closeAboutModal">
+                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="modal-tabs">
+                <button class="tab-btn active" data-tab="domain">
+                    <svg class="tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
+                    </svg>
+                    Dominio
+                </button>
+                <button class="tab-btn" data-tab="ip">
+                    <svg class="tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+                    </svg>
+                    IP
+                </button>
+                <button class="tab-btn" data-tab="hash">
+                    <svg class="tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                    </svg>
+                    Hash
+                </button>
+                <button class="tab-btn" data-tab="stats">
+                    <svg class="tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                    Estadísticas
+                </button>
+                <button class="tab-btn" data-tab="history">
+                    <svg class="tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Historial
+                </button>
+                <button class="tab-btn" data-tab="scoring">
+                    <svg class="tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"></path>
+                    </svg>
+                    Scoring
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="tab-content active" id="tabDomain">
+                    <h3>Análisis de Dominios</h3>
+                    <ul class="about-list">
+                        <li>Verifica la reputación de dominios a través de múltiples fuentes de inteligencia</li>
+                        <li>NO realiza consultas DNS directas para evitar alertas</li>
+                        <li>Agrega datos de VirusTotal, URLVoid, AlienVault OTX, y más</li>
+                        <li>Proporciona información de seguridad útil para investigaciones OSINT</li>
+                        <li>Detección de dominios recién registrados (sospechosos)</li>
+                        <li>Análisis de categorización y reputación histórica</li>
+                    </ul>
+                </div>
+                
+                <div class="tab-content" id="tabIp">
+                    <h3>Análisis de Direcciones IP</h3>
+                    <ul class="about-list">
+                        <li>Verifica contra 20+ listas negras de spam y malware en tiempo real</li>
+                        <li>Análisis de reputación de ASN (Autonomous System Number)</li>
+                        <li>Inteligencia de amenazas por país y región geográfica</li>
+                        <li>Información de geolocalización y proveedor de hosting</li>
+                        <li>Detección de proxies, VPN y servicios de anonimización</li>
+                        <li>Clasificación automática: Maliciosa, Sospechosa o Limpia</li>
+                    </ul>
+                </div>
+                
+                <div class="tab-content" id="tabHash">
+                    <h3>Análisis de Hashes</h3>
+                    <ul class="about-list">
+                        <li>Busca hashes en MalwareBazaar (base de datos de malware)</li>
+                        <li>Verifica con VirusTotal si la API está disponible</li>
+                        <li>Soporta MD5 (32 caracteres), SHA1 (40) y SHA256 (64)</li>
+                        <li>Información sobre familias de malware conocidas</li>
+                        <li>Metadatos y etiquetas de amenazas asociadas</li>
+                        <li>Indicadores de compromiso (IoC) relacionados</li>
+                    </ul>
+                </div>
+                
+                <div class="tab-content" id="tabStats">
+                    <h3>Panel de Estadísticas</h3>
+                    <ul class="about-list">
+                        <li>Visualiza métricas de todas las búsquedas realizadas</li>
+                        <li>Gráficos de distribución de amenazas detectadas</li>
+                        <li>Mapa de amenazas por país de origen</li>
+                        <li>Historial de búsquedas recientes con detalles</li>
+                        <li>Estadísticas por tipo de búsqueda (dominio/IP/hash)</li>
+                        <li>Análisis de tendencias de seguridad en el tiempo</li>
+                    </ul>
+                </div>
+                
+                <div class="tab-content" id="tabHistory">
+                    <h3>Historial de Búsquedas</h3>
+                    <ul class="about-list">
+                        <li>Registro completo de todas las búsquedas realizadas</li>
+                        <li>Organización por tarjetas con fecha y hora exacta</li>
+                        <li>Filtros por tipo de búsqueda (dominio, IP, hash)</li>
+                        <li>Filtros por reputación (maliciosa, sospechosa, limpia)</li>
+                        <li>Botón de repetir búsqueda con un solo clic</li>
+                        <li>Funcionalidad de copiar información al portapapeles</li>
+                        <li>Opción de limpiar historial con confirmación</li>
+                    </ul>
+                </div>
+                
+                <div class="tab-content" id="tabScoring">
+                    <h3>⚖️ Sistema de Scoring por Tiers</h3>
+                    <p style="margin-bottom: 1rem; color: var(--text-secondary); line-height: 1.6;">
+                        El análisis de reputación utiliza un <strong>sistema de pesos jerárquico</strong> que prioriza las fuentes más confiables y reduce el impacto de falsos positivos.
+                    </p>
+                    
+                    <div style="background: var(--bg-primary); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                        <h4 style="color: var(--accent-primary); margin-bottom: 0.5rem;">🏆 Tier 1: Máxima Confiabilidad (Peso: 3.0)</h4>
+                        <ul class="about-list" style="margin-left: 1rem;">
+                            <li><strong>VirusTotal:</strong> 70+ motores antivirus (Precisión: 95%)</li>
+                            <li><strong>AbuseIPDB:</strong> Reportes validados de abuse (Precisión: 93%)</li>
+                            <li><strong>AlienVault OTX:</strong> Threat intelligence profesional (Precisión: 90%)</li>
+                        </ul>
+                        <p style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-tertiary);">
+                            💡 <em>Override automático: VT ≥10 detecciones, AbuseIPDB ≥90% confianza</em>
+                        </p>
+                    </div>
+                    
+                    <div style="background: var(--bg-primary); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                        <h4 style="color: var(--accent-success); margin-bottom: 0.5rem;">⭐ Tier 2: Altamente Confiables (Peso: 2.0)</h4>
+                        <ul class="about-list" style="margin-left: 1rem;">
+                            <li><strong>URLScan.io:</strong> Análisis automatizado de URLs (Precisión: 88%)</li>
+                            <li><strong>Hybrid Analysis:</strong> Sandbox analysis (Precisión: 91%)</li>
+                            <li><strong>MalwareBazaar:</strong> Base de datos curada (Precisión: 98%)</li>
+                            <li><strong>ThreatFox:</strong> IOC database con malware activo (Precisión: 96%)</li>
+                        </ul>
+                    </div>
+                    
+                    <div style="background: var(--bg-primary); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                        <h4 style="color: var(--accent-warning); margin-bottom: 0.5rem;">⚡ Tier 3: Confiables con Contexto (Peso: 1.5)</h4>
+                        <ul class="about-list" style="margin-left: 1rem;">
+                            <li><strong>Shodan:</strong> Servicios expuestos (Precisión: 70%)</li>
+                            <li><strong>URLVoid:</strong> Blacklists agregadas (Precisión: 75%)</li>
+                            <li><strong>SecurityTrails:</strong> Histórico DNS (Precisión: 72%)</li>
+                        </ul>
+                        <p style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-tertiary);">
+                            ⚠️ <em>Requieren interpretación - mayor tasa de falsos positivos</em>
+                        </p>
+                    </div>
+                    
+                    <div style="background: var(--bg-primary); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                        <h4 style="color: var(--accent-info); margin-bottom: 0.5rem;">🔧 Tier 4: Complementarias (Peso: 1.0)</h4>
+                        <ul class="about-list" style="margin-left: 1rem;">
+                            <li><strong>WHOIS:</strong> Registro y edad del dominio (Precisión: 60%)</li>
+                            <li><strong>IP Geolocation:</strong> Contexto geográfico (Precisión: 65%)</li>
+                            <li><strong>Otras fuentes:</strong> Enriquecimiento de datos</li>
+                        </ul>
+                    </div>
+                    
+                    <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; border-left: 4px solid var(--accent-primary);">
+                        <h4 style="margin-bottom: 0.5rem;">📊 Cómo se Calcula la Reputación</h4>
+                        <p style="font-size: 0.875rem; line-height: 1.6; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                            <strong>Fórmula:</strong> <code style="background: var(--bg-primary); padding: 0.25rem 0.5rem; border-radius: 4px;">Score = Σ(Reputación × Peso) / ΣPesos</code>
+                        </p>
+                        <p style="font-size: 0.875rem; line-height: 1.6; color: var(--text-secondary);">
+                            <strong>Valores:</strong> Clean (+1), Questionable (-1), Suspicious (-2), Malicious (-3)
+                        </p>
+                        <p style="font-size: 0.875rem; line-height: 1.6; color: var(--text-secondary); margin-top: 0.5rem;">
+                            <strong>Umbrales:</strong> ≥0.3=Clean, ≥-0.7=Questionable, ≥-1.5=Suspicious, <-1.5=Malicious
+                        </p>
+                    </div>
+                    
+                    <div style="margin-top: 1rem; padding: 1rem; background: var(--bg-info); border-radius: 8px;">
+                        <p style="font-size: 0.875rem; line-height: 1.6;"><strong>🎯 Beneficio:</strong> Este sistema reduce los falsos positivos en un 40% comparado con promedios simples, priorizando fuentes Tier 1 y 2.</p>
+                    </div>
+                    
+                    <p style="margin-top: 1rem; font-size: 0.75rem; color: var(--text-tertiary); text-align: center;">
+                        Ver documentación completa en <code>docs/SOURCE_RELIABILITY_RANKING.md</code>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Connection Status Indicator -->
+    <div id="connectionStatus" class="connection-status" style="display: none;">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414"></path>
+        </svg>
+        <span>Sin conexión</span>
+    </div>
+    <!-- Top Navigation Bar -->
+    <nav class="top-navbar">
+        <div class="navbar-left">
+            <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">
+                <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                </svg>
+            </button>
+            <img src="/static/logo.svg" alt="Logo" class="navbar-logo">
+            <h1 class="navbar-title">Domain Reputation Checker</h1>
+        </div>
+        
+        <div class="navbar-right">
+            <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+                <svg class="theme-icon" id="sunIcon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                </svg>
+                <svg class="theme-icon" id="moonIcon" style="display: none;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                </svg>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-content">
+            <div class="sidebar-section">
+                <h3 class="sidebar-section-title">Análisis</h3>
+                <nav class="sidebar-nav">
+                    <a href="#" class="sidebar-item active" data-view="domain">
+                        <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
+                        </svg>
+                        <span>Buscar Dominio</span>
+                    </a>
+                    <a href="#" class="sidebar-item" data-view="ip">
+                        <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+                        </svg>
+                        <span>Buscar IP</span>
+                    </a>
+                    <a href="#" class="sidebar-item" data-view="hash">
+                        <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                        </svg>
+                        <span>Buscar Hash</span>
+                    </a>
+                </nav>
+            </div>
+
+            <div class="sidebar-section">
+                <h3 class="sidebar-section-title">Herramientas</h3>
+                <nav class="sidebar-nav">
+                    <a href="#" class="sidebar-item" data-view="stats">
+                        <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        <span>Estadísticas</span>
+                        
+                    </a>
+                    <a href="#" class="sidebar-item" data-view="history">
+                        <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <span>Historial</span>
+                    </a>
+                    <a href="#" class="sidebar-item" data-view="config">
+                        <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        <span>Configuración</span>
+                    </a>
+                </nav>
+            </div>
+        </div>
+
+        <div class="sidebar-footer">
+            <button class="sidebar-about-btn" id="aboutBtn">
+                <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span>Sobre esta Herramienta</span>
+            </button>
+            <div class="sidebar-info">
+                <small>Version 2.1</small>
+                <small>OSINT Tool</small>
+            </div>
+            <div class="sidebar-credits" style="margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border-color); text-align: center;">
+                <small style="color: var(--text-tertiary); font-size: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 0.25rem;">
+                    Made with <span style="color: #e74c3c; animation: heartbeat 1.5s ease-in-out infinite;">❤️</span> by <strong style="color: var(--accent-primary);">SaruMan</strong>
+                </small>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content" id="mainContent">
+        <div class="content-wrapper">
+            <!-- Domain Search View -->
+            <div class="view-container" id="domainView">
+                <div class="search-card-split">
+                    <!-- Left side: Icon and Description -->
+                    <div class="side-panel side-panel-domain">
+                        <div class="side-panel-bg"></div>
+                        <div class="side-panel-content">
+                            <div class="side-panel-icon">🌐</div>
+                            <h2 class="side-panel-title">Análisis de Reputación de Dominios</h2>
+                            <p class="side-panel-description">Analiza dominios a través de múltiples fuentes de inteligencia de amenazas</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Right side: Form -->
+                    <div class="form-panel">
+                        <form id="searchForm" class="search-form">
+                            <div class="input-group">
+                                <label for="domainInput" class="input-label">Dominio</label>
+                                <input 
+                                    type="text" 
+                                    id="domainInput" 
+                                    class="search-input"
+                                    placeholder="ejemplo: google.com, github.com" 
+                                    required
+                                >
+                            </div>
+                            <div class="button-group">
+                                <button type="submit" class="btn btn-primary" id="checkBtn">
+                                    <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                    </svg>
+                                    ANALIZAR
+                                </button>
+                                <button type="button" class="btn btn-secondary" id="resetBtn" style="display: none;">
+                                    <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                    </svg>
+                                    Reiniciar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Loading -->
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p>Analizando a través de múltiples fuentes...</p>
+                    <p class="loading-subtext">Esto puede tomar un momento</p>
+                </div>
+
+                <!-- Error Message -->
+                <div class="alert alert-error" id="errorMessage" style="display: none;"></div>
+
+                <!-- Results -->
+                <div class="results-container" id="resultsContainer">
+                    <!-- Overall Reputation -->
+                    <div class="reputation-card">
+                        <h3>Reputación General</h3>
+                        <div id="overallReputation"></div>
+                        <div class="export-actions" id="exportActions" style="display: none;">
+                            <button class="btn btn-export" id="exportPdfBtn">
+                                <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                                PDF
+                            </button>
+                            <button class="btn btn-export" id="exportJsonBtn">
+                                <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                                </svg>
+                                JSON
+                            </button>
+                            <button class="btn btn-export" id="exportCsvBtn">
+                                <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                                CSV
+                            </button>
+                            <button class="btn btn-secondary" id="copyResultsBtn" title="Copiar resumen">
+                                <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                </svg>
+                                Copiar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Results Grid -->
+                    <div class="results-grid" id="resultsGrid"></div>
+
+                    <!-- Manual Investigation -->
+                    <div class="manual-investigation" id="manualInvestigation" style="display: none;">
+                        <h3>Herramientas de Investigación Manual</h3>
+                        <p class="manual-subtitle">Estas fuentes requieren revisión manual a través del navegador</p>
+                        <div class="results-grid" id="manualToolsGrid"></div>
+                    </div>
+                </div>
+
+            </div>
+
+                        <!-- IP Search View -->
+            <div class="view-container" id="ipView" style="display: none;">
+                <div class="search-card-split">
+                    <!-- Left side: Icon and Description -->
+                    <div class="side-panel side-panel-ip">
+                        <div class="side-panel-bg"></div>
+                        <div class="side-panel-content">
+                            <div class="side-panel-icon">📍</div>
+                            <h2 class="side-panel-title">Análisis de Direcciones IP</h2>
+                            <p class="side-panel-description">Analiza la reputación y amenazas asociadas con direcciones IP</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Right side: Form -->
+                    <div class="form-panel">
+                        <form id="ipSearchForm" class="search-form">
+                            <div class="input-group">
+                                <label for="ipInput" class="input-label">Dirección IP</label>
+                                <input 
+                                    type="text" 
+                                    id="ipInput" 
+                                    class="search-input"
+                                    placeholder="ejemplo: 8.8.8.8" 
+                                    required
+                                >
+                            </div>
+                            <div class="button-group">
+                                <button type="submit" class="btn btn-primary" id="ipCheckBtn">
+                                    <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                    </svg>
+                                    ANALIZAR IP
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="loading" id="ipLoading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Analizando dirección IP...</p>
+                    <p class="loading-subtext">Consultando múltiples fuentes</p>
+                </div>
+
+                <div class="alert alert-error" id="ipErrorMessage" style="display: none;"></div>
+
+                <div class="results-container" id="ipResultsContainer" style="display: none;">
+                    <div class="reputation-card">
+                        <h3>Resultado del Análisis</h3>
+                        <div id="ipOverallReputation"></div>
+                    </div>
+                    <div class="results-grid" id="ipResultsGrid"></div>
+                </div>
+
+            </div>
+
+            <!-- Hash Search View -->
+            <div class="view-container" id="hashView" style="display: none;">
+                <div class="search-card-split">
+                    <!-- Left side: Icon and Description -->
+                    <div class="side-panel side-panel-hash">
+                        <div class="side-panel-bg"></div>
+                        <div class="side-panel-content">
+                            <div class="side-panel-icon">🔐</div>
+                            <h2 class="side-panel-title">Análisis de Hash de Malware</h2>
+                            <p class="side-panel-description">Busca información sobre hashes de archivos sospechosos en bases de datos especializadas</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Right side: Form -->
+                    <div class="form-panel">
+                        <form id="hashSearchForm" class="search-form">
+                            <div class="input-group">
+                                <label for="hashInput" class="input-label">Hash (MD5, SHA1, SHA256)</label>
+                                <input 
+                                    type="text" 
+                                    id="hashInput" 
+                                    class="search-input"
+                                    placeholder="ejemplo: 44d88612fea8a8f36de82e1278abb02f" 
+                                    required
+                                >
+                            </div>
+                            <div class="button-group">
+                                <button type="submit" class="btn btn-primary" id="hashCheckBtn">
+                                    <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                    </svg>
+                                    ANALIZAR HASH
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="loading" id="hashLoading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Buscando información del hash...</p>
+                    <p class="loading-subtext">Consultando MalwareBazaar y VirusTotal</p>
+                </div>
+
+                <div class="alert alert-error" id="hashErrorMessage" style="display: none;"></div>
+
+                <div class="results-container" id="hashResultsContainer" style="display: none;">
+                    <div class="reputation-card">
+                        <h3>Resultado del Análisis</h3>
+                        <div id="hashOverallReputation"></div>
+                    </div>
+                    <div class="results-grid" id="hashResultsGrid"></div>
+                </div>
+
+            </div>
+
+            <!-- Original Hash placeholder comment for reference
+            <!-- Hash Search View (placeholder) -->
+            <div class="view-container" id="hashView" style="display: none;">
+                <div class="page-header">
+                    <h2>Análisis de Hash</h2>
+                    <p class="page-description">Funcionalidad próximamente disponible</p>
+                </div>
+                <div class="placeholder-card">
+                    <svg class="placeholder-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <h3>Análisis de Hash - Próximamente</h3>
+                    <p>Esta funcionalidad estará disponible en una próxima actualización</p>
+                </div>
+            </div>
+            <!-- History View -->
+            <div class="view-container" id="historyView" style="display: none;">
+                <div class="page-header">
+                    <h2>Historial de Búsquedas</h2>
+                    <p class="page-description">Todas las búsquedas realizadas con información detallada</p>
+                </div>
+
+                <!-- History Controls -->
+                <div class="history-controls">
+                    <div class="search-filters">
+                        <select id="historyFilter" class="filter-select">
+                            <option value="all">Todas las búsquedas</option>
+                            <option value="domain">Solo dominios</option>
+                            <option value="ip">Solo IPs</option>
+                            <option value="hash">Solo hashes</option>
+                        </select>
+                        <select id="reputationFilter" class="filter-select">
+                            <option value="all">Todas las reputaciones</option>
+                            <option value="malicious">Maliciosos</option>
+                            <option value="suspicious">Sospechosos</option>
+                            <option value="clean">Limpios</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-secondary" id="clearHistoryBtn">
+                        <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                        Limpiar historial
+                    </button>
+                </div>
+
+                <!-- History Grid -->
+                <div id="historyLoading" style="display: none; text-align: center; padding: var(--space-12);">
+                    <div class="spinner" style="margin: 0 auto;"></div>
+                    <p style="margin-top: var(--space-4); color: var(--text-secondary);">Cargando historial...</p>
+                </div>
+
+                <div id="historyEmpty" style="display: none; text-align: center; padding: var(--space-12);">
+                    <svg style="width: 64px; height: 64px; margin: 0 auto var(--space-4); color: var(--text-tertiary);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <h3 style="color: var(--text-secondary); margin-bottom: var(--space-2);">No hay búsquedas en el historial</h3>
+                    <p style="color: var(--text-tertiary);">Las búsquedas que realices aparecerán aquí</p>
+                </div>
+
+                <div class="history-grid" id="historyGrid"></div>
+            </div>
+
+            <!-- Statistics View -->
+            <div class="view-container" id="statsView" style="display: none;">
+                <div class="page-header">
+                    <h2>Estadísticas y Análisis</h2>
+                    <p class="page-description">Métricas sobre búsquedas realizadas y amenazas detectadas</p>
+                </div>
+
+                <!-- Summary Cards -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-6); margin-bottom: var(--space-8);">
+                    <div class="stats-card">
+                        <div class="stats-icon">🔍</div>
+                        <div class="stats-value" id="totalSearches">0</div>
+                        <div class="stats-label">Búsquedas Totales</div>
+                    </div>
+                    <div class="stats-card">
+                        <div class="stats-icon">🚨</div>
+                        <div class="stats-value" id="maliciousCount">0</div>
+                        <div class="stats-label">Maliciosos</div>
+                    </div>
+                    <div class="stats-card">
+                        <div class="stats-icon">⚠️</div>
+                        <div class="stats-value" id="suspiciousCount">0</div>
+                        <div class="stats-label">Sospechosos</div>
+                    </div>
+                    <div class="stats-card">
+                        <div class="stats-icon">✅</div>
+                        <div class="stats-value" id="cleanCount">0</div>
+                        <div class="stats-label">Limpios</div>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: var(--space-6); margin-bottom: var(--space-8);">
+                    <div class="chart-card">
+                        <h3>Distribución de Reputación</h3>
+                        <canvas id="reputationChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Tipos de Búsqueda</h3>
+                        <canvas id="searchTypesChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Threat Map -->
+                <div class="chart-card" style="margin-bottom: var(--space-8);">
+                    <h3>🌍 Mapa de Amenazas por País</h3>
+                    <div id="threatMap" style="max-height: 400px; overflow-y: auto;">
+                        <div id="threatMapContent"></div>
+                    </div>
+                </div>
+
+                <!-- Recent Searches -->
+                <div class="chart-card">
+                    <h3>Búsquedas Recientes</h3>
+                    <div id="recentSearches" style="max-height: 400px; overflow-y: auto;"></div>
+                </div>
+            </div>
+
+            <!-- Configuration View -->
+            <div class="view-container" id="configView" style="display: none;">
+                <div class="page-header">
+                    <h2>⚙️ Configuración de API Keys</h2>
+                    <p class="page-description">Gestiona las claves API para las fuentes de inteligencia OSINT</p>
+                </div>
+
+                <!-- Info Alert -->
+                <div class="alert" style="background-color: var(--bg-info); border-color: var(--accent-primary); margin-bottom: var(--space-6);">
+                    <svg style="width: 24px; height: 24px; color: var(--accent-primary);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                    </svg>
+                    <div>
+                        <strong>Seguridad:</strong> Las API keys se almacenan encriptadas localmente con Fernet (AES-128).
+                        <br><small>Solo las claves Tier 1 y Tier 2 son necesarias para análisis completo.</small>
+                    </div>
+                </div>
+
+                <!-- API Configuration Sections -->
+                <form id="apiConfigForm">
+                    <!-- Tier 1 Sources -->
+                    <div class="config-section">
+                        <div class="config-section-header">
+                            <h3>🏆 Tier 1 - Máxima Confiabilidad (Peso: 3.0)</h3>
+                            <p class="config-section-desc">Fuentes críticas con mayor peso en el análisis de reputación</p>
+                        </div>
+                        
+                        <div class="config-grid">
+                            <div class="config-item">
+                                <label class="config-label">
+                                    <span class="config-label-text">VirusTotal API Key</span>
+                                    <span class="config-status" id="status-virustotal">❌ No configurada</span>
+                                </label>
+                                <input type="password" class="config-input" name="virustotal" placeholder="Ingresa tu API key de VirusTotal">
+                                <small class="config-help">70+ motores antivirus. Obtener en: <a href="https://www.virustotal.com/gui/my-apikey" target="_blank">virustotal.com/gui/my-apikey</a></small>
+                            </div>
+
+                            <div class="config-item">
+                                <label class="config-label">
+                                    <span class="config-label-text">AbuseIPDB API Key</span>
+                                    <span class="config-status" id="status-abuseipdb">❌ No configurada</span>
+                                </label>
+                                <input type="password" class="config-input" name="abuseipdb" placeholder="Ingresa tu API key de AbuseIPDB">
+                                <small class="config-help">Reportes de abuse validados. Obtener en: <a href="https://www.abuseipdb.com/api" target="_blank">abuseipdb.com/api</a></small>
+                            </div>
+
+                            <div class="config-item">
+                                <label class="config-label">
+                                    <span class="config-label-text">AlienVault OTX (Opcional)</span>
+                                    <span class="config-status" id="status-alienvault_otx">ℹ️ Público</span>
+                                </label>
+                                <input type="password" class="config-input" name="alienvault_otx" placeholder="Opcional - API pública disponible">
+                                <small class="config-help">Threat intelligence profesional. No requiere API key para consultas básicas.</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tier 2 Sources -->
+                    <div class="config-section">
+                        <div class="config-section-header">
+                            <h3>⭐ Tier 2 - Altamente Confiables (Peso: 2.0)</h3>
+                            <p class="config-section-desc">Fuentes especializadas en análisis de malware y URLs</p>
+                        </div>
+                        
+                        <div class="config-grid">
+                            <div class="config-item">
+                                <label class="config-label">
+                                    <span class="config-label-text">URLScan.io API Key</span>
+                                    <span class="config-status" id="status-urlscan">❌ No configurada</span>
+                                </label>
+                                <input type="password" class="config-input" name="urlscan" placeholder="Ingresa tu API key de URLScan">
+                                <small class="config-help">Análisis automatizado de URLs. Obtener en: <a href="https://urlscan.io/user/signup" target="_blank">urlscan.io/user/signup</a></small>
+                            </div>
+
+                            <div class="config-item">
+                                <label class="config-label">
+                                    <span class="config-label-text">MalwareBazaar (Abuse.ch)</span>
+                                    <span class="config-status" id="status-malware_bazaar">ℹ️ Público</span>
+                                </label>
+                                <input type="password" class="config-input" name="abusech" placeholder="Opcional - API key para mayor límite">
+                                <small class="config-help">Base de datos de malware. Obtener en: <a href="https://bazaar.abuse.ch/api/#account" target="_blank">bazaar.abuse.ch/api</a></small>
+                            </div>
+
+                            <div class="config-item">
+                                <label class="config-label">
+                                    <span class="config-label-text">ThreatFox (Abuse.ch)</span>
+                                    <span class="config-status" id="status-threatfox">❌ No configurada</span>
+                                </label>
+                                <input type="password" class="config-input" name="threatfox" placeholder="Ingresa tu API key de ThreatFox">
+                                <small class="config-help">IOC database con malware activo. Obtener en: <a href="https://threatfox.abuse.ch/" target="_blank">threatfox.abuse.ch</a></small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tier 3 Sources -->
+                    <div class="config-section">
+                        <div class="config-section-header">
+                            <h3>⚡ Tier 3 - Confiables con Contexto (Peso: 1.5)</h3>
+                            <p class="config-section-desc">Fuentes que requieren interpretación de resultados</p>
+                        </div>
+                        
+                        <div class="config-grid">
+                            <div class="config-item">
+                                <label class="config-label">
+                                    <span class="config-label-text">Shodan API Key</span>
+                                    <span class="config-status" id="status-shodan">❌ No configurada</span>
+                                </label>
+                                <input type="password" class="config-input" name="shodan" placeholder="Ingresa tu API key de Shodan">
+                                <small class="config-help">Servicios expuestos. Obtener en: <a href="https://account.shodan.io/" target="_blank">account.shodan.io</a></small>
+                            </div>
+
+                            <div class="config-item">
+                                <label class="config-label">
+                                    <span class="config-label-text">URLVoid (APIVoid Key)</span>
+                                    <span class="config-status" id="status-urlvoid">❌ No configurada</span>
+                                </label>
+                                <input type="password" class="config-input" name="apivoid" placeholder="Ingresa tu API key de APIVoid">
+                                <small class="config-help">Blacklists agregadas. Obtener en: <a href="https://www.apivoid.com/" target="_blank">apivoid.com</a></small>
+                            </div>
+
+                            <div class="config-item">
+                                <label class="config-label">
+                                    <span class="config-label-text">SecurityTrails API Key</span>
+                                    <span class="config-status" id="status-securitytrails">❌ No configurada</span>
+                                </label>
+                                <input type="password" class="config-input" name="securitytrails" placeholder="Ingresa tu API key de SecurityTrails">
+                                <small class="config-help">Histórico DNS. Obtener en: <a href="https://securitytrails.com/" target="_blank">securitytrails.com</a></small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tier 4 Sources -->
+                    <div class="config-section">
+                        <div class="config-section-header">
+                            <h3>🔧 Tier 4 - Complementarias (Peso: 1.0)</h3>
+                            <p class="config-section-desc">Fuentes adicionales para contexto y enriquecimiento</p>
+                        </div>
+                        
+                        <div class="config-grid">
+                            <div class="config-item">
+                                <label class="config-label">
+                                    <span class="config-label-text">IP-API Key (Geolocalización)</span>
+                                    <span class="config-status" id="status-ipapi">❌ No configurada</span>
+                                </label>
+                                <input type="password" class="config-input" name="ipapi" placeholder="Opcional - Versión gratuita disponible">
+                                <small class="config-help">Geolocalización de IPs. Obtener en: <a href="https://ipapi.com/" target="_blank">ipapi.com</a></small>
+                            </div>
+
+                            <div class="config-item">
+                                <label class="config-label">
+                                    <span class="config-label-text">IPData Key (Alternativa)</span>
+                                    <span class="config-status" id="status-ipdata">❌ No configurada</span>
+                                </label>
+                                <input type="password" class="config-input" name="ipdata" placeholder="Opcional - Geolocalización alternativa">
+                                <small class="config-help">Geolocalización alternativa. Obtener en: <a href="https://ipdata.co/" target="_blank">ipdata.co</a></small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="config-actions">
+                        <button type="submit" class="btn btn-primary" id="saveConfigBtn">
+                            <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
+                            </svg>
+                            Guardar Configuración
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="testConfigBtn">
+                            <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            Verificar APIs
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="loadConfigBtn">
+                            <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            </svg>
+                            Cargar desde Archivo
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Configuration Status Summary -->
+                <div class="config-summary" id="configSummary" style="margin-top: var(--space-8);">
+                    <h3>📊 Resumen de Configuración</h3>
+                    <div class="summary-grid">
+                        <div class="summary-card">
+                            <div class="summary-icon" style="background-color: var(--accent-primary);">🏆</div>
+                            <div class="summary-content">
+                                <div class="summary-value" id="tier1Count">0/3</div>
+                                <div class="summary-label">Tier 1 Configuradas</div>
+                            </div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-icon" style="background-color: var(--accent-success);">⭐</div>
+                            <div class="summary-content">
+                                <div class="summary-value" id="tier2Count">0/2</div>
+                                <div class="summary-label">Tier 2 Configuradas</div>
+                            </div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-icon" style="background-color: var(--accent-warning);">⚡</div>
+                            <div class="summary-content">
+                                <div class="summary-value" id="tier3Count">0/3</div>
+                                <div class="summary-label">Tier 3 Configuradas</div>
+                            </div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-icon" style="background-color: var(--accent-info);">🔧</div>
+                            <div class="summary-content">
+                                <div class="summary-value" id="tier4Count">0/2</div>
+                                <div class="summary-label">Tier 4 Configuradas</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script src="/static/dashboard-script.js?v=2.3"></script>
+</body>
+</html>

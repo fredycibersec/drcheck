@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Domain Reputation Checker - OSINT Tool</title>
+    <!-- Favicon for modern browsers -->
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <!-- Favicon for browsers that don't support SVG -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png">
+    <!-- Favicon for legacy browsers -->
+    <link rel="shortcut icon" href="/static/favicon.ico">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Professional Grayscale Theme -->
+    <link rel="stylesheet" href="/static/styles-v2.css">
+</head>
+<body data-theme="dark">
+    <!-- Theme Toggle -->
+    <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle dark/light mode">
+        <svg class="theme-toggle-icon" id="sunIcon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+        </svg>
+        <svg class="theme-toggle-icon" id="moonIcon" style="display: none;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+        </svg>
+    </button>
+    
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo-container">
+                <img src="/static/logo.svg" alt="Domain Reputation Checker Logo" class="logo">
+            </div>
+            <h1>Domain Reputation Checker</h1>
+            <p>Advanced Threat Intelligence Analysis Tool</p>
+        </div>
+
+        <!-- Search Form -->
+        <div class="search-container">
+            <form id="searchForm" class="search-form">
+                <div class="input-group">
+                    <input 
+                        type="text" 
+                        id="domainInput" 
+                        placeholder="Enter domain or hash (e.g., example.com or MD5/SHA256)" 
+                        required
+                    >
+                </div>
+                <button type="submit" class="btn" id="checkBtn">
+                    🔍 Check Reputation
+                </button>
+                <button type="button" class="btn btn-secondary" id="resetBtn" style="display: none;">
+                    🔄 Reset
+                </button>
+            </form>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Analyzing domain across multiple threat intelligence sources...</p>
+            <p style="color: var(--text-secondary); font-size: 0.9em;">This may take a minute</p>
+        </div>
+
+        <!-- Error Message -->
+        <div class="error-message" id="errorMessage"></div>
+
+        <!-- Results Container -->
+        <div class="results-container" id="resultsContainer">
+            <!-- Overall Reputation -->
+            <div class="overall-reputation">
+                <h2>Overall Reputation</h2>
+                <div id="overallReputation"></div>
+                <div class="export-actions" id="exportActions" style="display: none;">
+                    <button class="btn btn-export" id="exportPdfBtn">
+                        📊 Export PDF Report
+                    </button>
+                </div>
+            </div>
+
+            <!-- Results Grid -->
+            <div class="results-grid" id="resultsGrid"></div>
+            
+            <!-- Manual Investigation Tools -->
+            <div class="manual-investigation" id="manualInvestigation" style="display: none;">
+                <h2 style="color: var(--text-primary); margin-bottom: 20px; text-align: center;">🔗 Manual Investigation Tools</h2>
+                <p style="color: var(--text-secondary); text-align: center; margin-bottom: 20px;">These sources require manual review via web browser</p>
+                <div class="results-grid" id="manualToolsGrid"></div>
+            </div>
+        </div>
+
+        <!-- Information Section -->
+        <div class="info-section">
+            <h3>📋 About This Tool</h3>
+            <ul>
+                <li>Checks domain reputation across multiple threat intelligence sources</li>
+                <li>Supports hash analysis (MD5, SHA1, SHA256) via MalwareBazaar & VirusTotal</li>
+                <li>Does NOT make direct DNS queries to avoid triggering alerts</li>
+                <li>Aggregates data from VirusTotal, URLVoid, AlienVault OTX, and more</li>
+                <li>Provides actionable security insights for OSINT investigations</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Theme Toggle
+        const themeToggle = document.getElementById('themeToggle');
+        const sunIcon = document.getElementById('sunIcon');
+        const moonIcon = document.getElementById('moonIcon');
+        const body = document.body;
+        
+        // Load saved theme or default to dark
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        body.setAttribute('data-theme', savedTheme);
+        updateThemeIcons(savedTheme);
+        
+        function updateThemeIcons(theme) {
+            if (theme === 'dark') {
+                sunIcon.style.display = 'block';
+                moonIcon.style.display = 'none';
+            } else {
+                sunIcon.style.display = 'none';
+                moonIcon.style.display = 'block';
+            }
+        }
+        
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = body.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            
+            body.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeIcons(newTheme);
+        });
+        
+        // Form elements
+        const form = document.getElementById('searchForm');
+        const loading = document.getElementById('loading');
+        const errorMessage = document.getElementById('errorMessage');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const overallReputation = document.getElementById('overallReputation');
+        const resultsGrid = document.getElementById('resultsGrid');
+        const checkBtn = document.getElementById('checkBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const exportPdfBtn = document.getElementById('exportPdfBtn');
+        const exportActions = document.getElementById('exportActions');
+        
+        let currentAnalysisData = null;
+
+        // Reset button handler
+        resetBtn.addEventListener('click', () => {
+            document.getElementById('domainInput').value = '';
+            resultsContainer.style.display = 'none';
+            errorMessage.style.display = 'none';
+            resetBtn.style.display = 'none';
+            exportActions.style.display = 'none';
+            currentAnalysisData = null;
+        });
+
+        // PDF export button handler
+        exportPdfBtn.addEventListener('click', async () => {
+            if (!currentAnalysisData) {
+                showError('No analysis data available');
+                return;
+            }
+            
+            exportPdfBtn.disabled = true;
+            exportPdfBtn.textContent = '⏳ Generating PDF...';
+            
+            try {
+                const response = await fetch('/api/export-pdf', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(currentAnalysisData)
+                });
+                
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.error || 'PDF generation failed');
+                }
+                
+                // Download the PDF
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `domain-reputation-${currentAnalysisData.domain}-${new Date().toISOString().split('T')[0]}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+            } catch (error) {
+                showError(`PDF export failed: ${error.message}`);
+            } finally {
+                exportPdfBtn.disabled = false;
+                exportPdfBtn.textContent = '📊 Export PDF Report';
+            }
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const domain = document.getElementById('domainInput').value.trim();
+            
+            if (!domain) {
+                showError('Please enter a domain');
+                return;
+            }
+
+            // Show loading
+            loading.style.display = 'block';
+            resultsContainer.style.display = 'none';
+            errorMessage.style.display = 'none';
+            checkBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/check', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ domain })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Analysis failed');
+                }
+
+                displayResults(data);
+                // Store data for export and show reset button
+                currentAnalysisData = data;
+                resetBtn.style.display = 'inline-block';
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                loading.style.display = 'none';
+                checkBtn.disabled = false;
+            }
+        });
+
+        function showError(message) {
+            errorMessage.textContent = `❌ Error: ${message}`;
+            errorMessage.style.display = 'block';
+        }
+
+        function displayResults(data) {
+            resultsContainer.style.display = 'block';
+            exportActions.style.display = 'flex';
+
+            // Display overall reputation
+            const reputation = data.overall_reputation;
+            const reputationEmojis = {
+                'clean': '✅',
+                'malicious': '🚨',
+                'suspicious': '⚠️',
+                'questionable': '🔍',
+                'unknown': '❓'
+            };
+
+            overallReputation.innerHTML = `
+                <h3>Domain: <span style="color: var(--text-primary);">${data.domain}</span></h3>
+                <div class="reputation-badge reputation-${reputation}">
+                    ${reputationEmojis[reputation] || '❓'} ${reputation.toUpperCase()}
+                </div>
+            `;
+
+            // Separate results into automated and manual
+            const automatedResults = [];
+            const manualResults = [];
+            
+            data.results.forEach(result => {
+                if (result.status === 'info') {
+                    manualResults.push(result);
+                } else {
+                    automatedResults.push(result);
+                }
+            });
+
+            // Display automated source results
+            resultsGrid.innerHTML = '';
+            automatedResults.forEach(result => {
+                const card = createSourceCard(result);
+                resultsGrid.appendChild(card);
+            });
+            
+            // Display manual investigation tools
+            const manualInvestigation = document.getElementById('manualInvestigation');
+            const manualToolsGrid = document.getElementById('manualToolsGrid');
+            
+            if (manualResults.length > 0) {
+                manualInvestigation.style.display = 'block';
+                manualToolsGrid.innerHTML = '';
+                manualResults.forEach(result => {
+                    const card = createSourceCard(result);
+                    manualToolsGrid.appendChild(card);
+                });
+            } else {
+                manualInvestigation.style.display = 'none';
+            }
+        }
+
+        function createSourceCard(result) {
+            const card = document.createElement('div');
+            card.className = 'source-card';
+
+            const statusClass = result.status === 'success' ? 'status-success' : 
+                               result.status === 'error' ? 'status-error' : 'status-info';
+
+            let reputationHTML = '';
+            if (result.status === 'success') {
+                const reputationClass = `reputation-${result.reputation}`;
+                const reputationEmojis = {
+                    'clean': '✅',
+                    'malicious': '🚨',
+                    'suspicious': '⚠️',
+                    'questionable': '🔍',
+                    'unknown': '❓'
+                };
+                reputationHTML = `
+                    <div class="reputation-indicator ${reputationClass}">
+                        ${reputationEmojis[result.reputation] || '❓'} ${result.reputation.toUpperCase()}
+                    </div>
+                `;
+            }
+
+            let detailsHTML = '';
+            if (result.status === 'success' && Object.keys(result.details).length > 0) {
+                detailsHTML = '<ul class="details-list">';
+                for (const [key, value] of Object.entries(result.details)) {
+                    const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    let displayValue = value;
+                    
+                    // Special formatting for age_risk
+                    if (key === 'age_risk') {
+                        const riskEmojis = {
+                            'high': '🔴 HIGH RISK',
+                            'medium': '🟡 MEDIUM RISK',
+                            'low': '🟢 LOW RISK',
+                            'none': '✅ ESTABLISHED'
+                        };
+                        displayValue = riskEmojis[value] || value.toUpperCase();
+                    }
+                    
+                    // Special handling for attack_categories - use badges
+                    if (key === 'attack_categories' && Array.isArray(value)) {
+                        if (value.length === 0) {
+                            displayValue = '<span style="color: var(--success); font-style: italic;">✓ No attacks recorded</span>';
+                            detailsHTML += `
+                                <li>
+                                    <span class="detail-label">${label}:</span>
+                                    <span class="detail-value">${displayValue}</span>
+                                </li>
+                            `;
+                            continue;
+                        } else {
+                            const badgesHTML = value.slice(0, 8).map(cat => 
+                                `<span class="badge badge-danger">${cat}</span>`
+                            ).join(' ');
+                            displayValue = `<div class="badge-container">${badgesHTML}${value.length > 8 ? ` <span class="badge">+${value.length - 8}</span>` : ''}</div>`;
+                            detailsHTML += `
+                                <li>
+                                    <span class="detail-label">${label}:</span>
+                                    <span class="detail-value" style="max-width: 100%;">${displayValue}</span>
+                                </li>
+                            `;
+                            continue;
+                        }
+                    }
+                    
+                    // Special handling for malicious_engines - show with expand
+                    if ((key === 'malicious_engines' || key === 'detected_by') && Array.isArray(value)) {
+                        if (value.length === 0) {
+                            displayValue = 'None';
+                        } else {
+                            const visible = value.slice(0, 3);
+                            const hidden = value.slice(3);
+                            const visibleHTML = visible.map(engine => 
+                                `<span class="badge badge-danger">${engine}</span>`
+                            ).join(' ');
+                            
+                            if (hidden.length > 0) {
+                                const expandId = `expand-${key}-${Math.random().toString(36).substr(2, 9)}`;
+                                const hiddenHTML = hidden.map(engine => 
+                                    `<span class="badge badge-danger">${engine}</span>`
+                                ).join(' ');
+                                displayValue = `
+                                    <div class="badge-container">
+                                        ${visibleHTML}
+                                        <span class="badge" onclick="document.getElementById('${expandId}').style.display='inline'; this.style.display='none';">+${hidden.length} more</span>
+                                        <span id="${expandId}" style="display:none;">${hiddenHTML}</span>
+                                    </div>
+                                `;
+                            } else {
+                                displayValue = `<div class="badge-container">${visibleHTML}</div>`;
+                            }
+                            detailsHTML += `
+                                <li>
+                                    <span class="detail-label">${label}:</span>
+                                    <span class="detail-value" style="max-width: 100%;">${displayValue}</span>
+                                </li>
+                            `;
+                            continue;
+                        }
+                    }
+                    
+                    // Special handling for recent_attacks array of objects
+                    if (key === 'recent_attacks' && Array.isArray(value)) {
+                        if (value.length === 0) {
+                            displayValue = '<span style="color: var(--success); font-style: italic;">✓ No recent attacks (90 days)</span>';
+                            detailsHTML += `
+                                <li>
+                                    <span class="detail-label">${label}:</span>
+                                    <span class="detail-value">${displayValue}</span>
+                                </li>
+                            `;
+                            continue;
+                        } else {
+                            // Format attack objects with expandable show more
+                            const initialShow = 3; // Show first 3 attacks
+                            const expandId = `expand-attacks-${Math.random().toString(36).substr(2, 9)}`;
+                            
+                            const formatAttack = (attack, idx) => {
+                                if (typeof attack === 'object' && attack !== null) {
+                                    let dateStr = attack.date || 'N/A';
+                                    let datePart = dateStr;
+                                    let timePart = '';
+                                    
+                                    // Convert to Zulu time format and split date/time
+                                    if (dateStr !== 'N/A') {
+                                        try {
+                                            const dateObj = new Date(dateStr);
+                                            if (!isNaN(dateObj.getTime())) {
+                                                const isoStr = dateObj.toISOString();
+                                                // Split into date (YYYY-MM-DD) and time (HH:MM:SSZ)
+                                                datePart = isoStr.split('T')[0];
+                                                timePart = isoStr.split('T')[1].replace('.000Z', 'Z');
+                                            }
+                                        } catch (e) {
+                                            // Keep original if parsing fails
+                                        }
+                                    }
+                                    
+                                    const categories = attack.categories ? attack.categories.join(', ') : 'Unknown';
+                                    
+                                    return `<div style="margin: 2px 0; padding: 4px 6px; background: rgba(255, 56, 96, 0.08); border-left: 3px solid var(--error); border-radius: 3px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px;">
+                                            <div style="display: flex; flex-direction: column; line-height: 1.1;">
+                                                <strong style="color: var(--error); font-size: 0.8em; white-space: nowrap;">[${idx + 1}] ${datePart}</strong>
+                                                ${timePart ? `<span style="color: var(--error); font-size: 0.7em; margin-top: 1px;">${timePart}</span>` : ''}
+                                            </div>
+                                            <div style="display: flex; flex-wrap: wrap; gap: 2px;">
+                                                ${categories.split(', ').map(cat => `<span class="badge badge-danger" style="font-size: 0.65em; padding: 1px 5px;">${cat}</span>`).join('')}
+                                            </div>
+                                        </div>
+                                    </div>`;
+                                }
+                                return '';
+                            };
+                            
+                            const visibleAttacks = value.slice(0, initialShow).map(formatAttack).join('');
+                            const hiddenAttacks = value.slice(initialShow).map((attack, idx) => formatAttack(attack, idx + initialShow)).join('');
+                            
+                            let attacksHTML = `<div>${visibleAttacks}</div>`;
+                            
+                            if (value.length > initialShow) {
+                                attacksHTML += `
+                                    <div id="${expandId}" style="display:none;">${hiddenAttacks}</div>
+                                    <button onclick="document.getElementById('${expandId}').style.display='block'; this.style.display='none';" 
+                                            style="margin-top: 10px; padding: 8px 16px; background: var(--error); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em; font-weight: 500; transition: all 0.2s;" 
+                                            onmouseover="this.style.background='#d63861';" 
+                                            onmouseout="this.style.background='var(--error)';">
+                                        Show ${value.length - initialShow} More Attacks ↓
+                                    </button>
+                                `;
+                            }
+                            
+                            detailsHTML += `
+                                <li style="flex-direction: column; align-items: stretch;">
+                                    <span class="detail-label">${label}:</span>
+                                    <div class="detail-value expanded" style="width: 100%;">${attacksHTML}</div>
+                                </li>
+                            `;
+                            continue;
+                        }
+                    }
+                    // Special handling for VT categories and other category-like arrays
+                    if ((key === 'vt_categories' || key === 'categories' || key === 'tags') && Array.isArray(value)) {
+                        if (value.length === 0) {
+                            displayValue = 'None';
+                        } else {
+                            const badgesHTML = value.slice(0, 6).map(cat => 
+                                `<span class="badge badge-warning">${cat}</span>`
+                            ).join(' ');
+                            displayValue = `<div class="badge-container">${badgesHTML}${value.length > 6 ? ` <span class="badge">+${value.length - 6}</span>` : ''}</div>`;
+                            detailsHTML += `
+                                <li>
+                                    <span class="detail-label">${label}:</span>
+                                    <span class="detail-value" style="max-width: 100%;">${displayValue}</span>
+                                </li>
+                            `;
+                            continue;
+                        }
+                    }
+                    
+                    // Special handling for IPs, ports, countries - show with badges
+                    if ((key === 'additional_ips' || key === 'open_ports' || key === 'countries') && Array.isArray(value)) {
+                        if (value.length === 0) {
+                            displayValue = 'None';
+                        } else {
+                            const visible = value.slice(0, 5);
+                            const hidden = value.slice(5);
+                            const badgesHTML = visible.map(item => 
+                                `<span class="badge">${item}</span>`
+                            ).join(' ');
+                            
+                            if (hidden.length > 0) {
+                                const expandId = `expand-${key}-${Math.random().toString(36).substr(2, 9)}`;
+                                const hiddenHTML = hidden.map(item => 
+                                    `<span class="badge">${item}</span>`
+                                ).join(' ');
+                                displayValue = `
+                                    <div class="badge-container">
+                                        ${badgesHTML}
+                                        <span class="badge" style="cursor:pointer;" onclick="document.getElementById('${expandId}').style.display='inline'; this.style.display='none';">+${hidden.length} more</span>
+                                        <span id="${expandId}" style="display:none;">${hiddenHTML}</span>
+                                    </div>
+                                `;
+                            } else {
+                                displayValue = `<div class="badge-container">${badgesHTML}</div>`;
+                            }
+                            detailsHTML += `
+                                <li>
+                                    <span class="detail-label">${label}:</span>
+                                    <span class="detail-value" style="max-width: 100%;">${displayValue}</span>
+                                </li>
+                            `;
+                            continue;
+                        }
+                    }
+                    
+                    // Special handling for nested objects
+                    else if (typeof value === 'object' && value !== null) {
+                        if (key === 'location' && typeof value === 'object') {
+                            // Format location data nicely
+                            const locationParts = [];
+                            if (value.city) locationParts.push(value.city);
+                            if (value.region) locationParts.push(value.region);
+                            if (value.country) locationParts.push(value.country);
+                            if (value.country_code) locationParts.push(`(${value.country_code})`);
+                            displayValue = locationParts.join(', ') || 'N/A';
+                        } else if (Array.isArray(value)) {
+                            // Format other arrays nicely
+                            if (value.length === 0) {
+                                displayValue = 'None';
+                            } else if (value.length <= 3) {
+                                displayValue = value.join(', ');
+                            } else {
+                                // Use expandable for longer arrays
+                                const expandId = `expand-arr-${Math.random().toString(36).substr(2, 9)}`;
+                                displayValue = `
+                                    ${value.slice(0, 3).join(', ')}
+                                    <span class="expand-button" onclick="this.style.display='none'; document.getElementById('${expandId}').style.display='inline';">(+${value.length - 3} more)</span>
+                                    <span id="${expandId}" style="display:none;">, ${value.slice(3).join(', ')}</span>
+                                `;
+                            }
+                        } else {
+                            // For other objects, show key-value pairs inline
+                            const pairs = Object.entries(value)
+                                .filter(([k, v]) => v !== null && v !== undefined && v !== '')
+                                .map(([k, v]) => `${k}: ${v}`);
+                            displayValue = pairs.length > 0 ? pairs.join(', ') : 'N/A';
+                        }
+                    }
+                    
+                    // Skip empty or null values
+                    if (displayValue === null || displayValue === undefined || displayValue === '') {
+                        continue;
+                    }
+                    
+                    detailsHTML += `
+                        <li>
+                            <span class="detail-label">${label}:</span>
+                            <span class="detail-value">${displayValue}</span>
+                        </li>
+                    `;
+                }
+                detailsHTML += '</ul>';
+            }
+
+            let messageHTML = '';
+            if (result.message) {
+                messageHTML = `<p style="color: var(--text-secondary); margin-top: 10px; font-size: 0.9em;">${result.message}</p>`;
+            }
+
+            let linkHTML = '';
+            if (result.url) {
+                linkHTML = `<a href="${result.url}" target="_blank" class="investigation-link">🔗 View Source</a>`;
+            }
+
+            card.innerHTML = `
+                <div class="source-header">
+                    <div class="source-name">${result.source}</div>
+                    <div class="status-badge ${statusClass}">${result.status}</div>
+                </div>
+                ${reputationHTML}
+                ${messageHTML}
+                ${detailsHTML}
+                ${linkHTML}
+            `;
+
+            return card;
+        }
+    </script>
+</body>
+</html>
