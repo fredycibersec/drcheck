@@ -1583,7 +1583,7 @@ function updateConfigSummary(sources) {
     const tier1Sources = ['virustotal', 'abuseipdb', 'alienvault_otx'];
     const tier2Sources = ['urlscan', 'malware_bazaar', 'threatfox'];
     const tier3Sources = ['shodan', 'urlvoid', 'securitytrails'];
-    const tier4Sources = ['ipapi', 'ipdata'];
+    const tier4Sources = ['ipapi', 'ipdata', 'networksdb'];
     
     const tier1Configured = tier1Sources.filter(s => sources[s]?.configured).length;
     const tier2Configured = tier2Sources.filter(s => sources[s]?.configured).length;
