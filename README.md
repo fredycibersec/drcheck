@@ -61,7 +61,7 @@
 
 ### 1. Clonar el Repositorio
 ```bash
-git clone https://github.com/tu-usuario/drcheck.git
+git clone https://github.com/fredycybersec/drcheck.git
 cd drcheck
 ```
 
