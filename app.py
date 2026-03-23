@@ -183,7 +183,14 @@ def get_country_flag_emoji(country_code):
     return chr(ord(code[0]) + 127397) + chr(ord(code[1]) + 127397)
 
 def check_networksdb_ip(ip_address, api_key=None):
-    """Check IP address with NetworksDB.io API (ip-info and ip-geo endpoints)"""
+    """Check IP address with NetworksDB.io API (ip-info and ip-geo endpoints)
+    
+    Returns comprehensive information including:
+    - Organization name, ID, and URL
+    - Network details: name, description, CIDR, IP range (first/last IP)
+    - Geolocation: continent, country, state, city, coordinates
+    - Number of domains hosted on this IP
+    """
     if not api_key:
         return None
     
@@ -197,7 +204,7 @@ def check_networksdb_ip(ip_address, api_key=None):
     
     try:
         # IP Info endpoint - Organization and network details
-        ip_info_url = f'https://networksdb.io/api/ip-info'
+        ip_info_url = 'https://networksdb.io/api/ip-info'
         headers = {'X-Api-Key': api_key}
         params = {'ip': ip_address}
         
@@ -206,24 +213,54 @@ def check_networksdb_ip(ip_address, api_key=None):
         if response.status_code == 200:
             data = response.json()
             
-            # Extract organization info
+            # Extract organization info (note: API uses 'organisation' with 's')
             if 'organisation' in data:
                 org = data['organisation']
                 if org.get('name'):
-                    result['details']['organization'] = org['name']
+                    result['details']['organization_name'] = org['name']
                 if org.get('id'):
                     result['details']['organization_id'] = org['id']
+                if org.get('url'):
+                    result['details']['organization_url'] = org['url']
             
-            # Extract network info
+            # Extract ASN information
+            if 'asn' in data:
+                asn = data['asn']
+                if asn.get('asn'):
+                    result['details']['asn_number'] = f"AS{asn['asn']}"
+                if asn.get('name'):
+                    result['details']['asn_name'] = asn['name']
+                if asn.get('description'):
+                    result['details']['asn_description'] = asn['description']
+            
+            # Extract network info (complete structure from docs)
             if 'network' in data:
                 net = data['network']
+                if net.get('netname'):
+                    result['details']['network_name'] = net['netname']
+                if net.get('description'):
+                    result['details']['network_description'] = net['description']
                 if net.get('cidr'):
                     result['details']['network_cidr'] = net['cidr']
-                if net.get('range_start') and net.get('range_end'):
-                    result['details']['ip_range'] = f"{net['range_start']} - {net['range_end']}"
+                if net.get('first_ip'):
+                    result['details']['range_first_ip'] = net['first_ip']
+                if net.get('last_ip'):
+                    result['details']['range_last_ip'] = net['last_ip']
+                if net.get('url'):
+                    result['details']['network_url'] = net['url']
+                
+                # Calculate and display IP range if we have first and last IP
+                if net.get('first_ip') and net.get('last_ip'):
+                    result['details']['ip_range'] = f"{net['first_ip']} - {net['last_ip']}"
+            
+            # Domains on IP count
+            if 'domains_on_ip' in data:
+                domains_count = data['domains_on_ip']
+                if domains_count > 0:
+                    result['details']['domains_hosted'] = domains_count
         
         # IP Geolocation endpoint - Geographic details
-        ip_geo_url = f'https://networksdb.io/api/ip-geo'
+        ip_geo_url = 'https://networksdb.io/api/ip-geo'
         geo_response = requests.get(ip_geo_url, headers=headers, params=params, timeout=10)
         
         if geo_response.status_code == 200:
@@ -231,13 +268,17 @@ def check_networksdb_ip(ip_address, api_key=None):
             
             if geo_data.get('continent'):
                 result['details']['continent'] = geo_data['continent']
+            if geo_data.get('countrycode'):
+                result['details']['country_code'] = geo_data['countrycode']
             if geo_data.get('country'):
                 result['details']['country'] = geo_data['country']
             if geo_data.get('state'):
                 result['details']['state'] = geo_data['state']
             if geo_data.get('city'):
                 result['details']['city'] = geo_data['city']
-            if geo_data.get('latitude') and geo_data.get('longitude'):
+            if geo_data.get('latitude') is not None and geo_data.get('longitude') is not None:
+                result['details']['latitude'] = geo_data['latitude']
+                result['details']['longitude'] = geo_data['longitude']
                 result['details']['coordinates'] = f"{geo_data['latitude']}, {geo_data['longitude']}"
         
         # If no data was collected, mark as no results
