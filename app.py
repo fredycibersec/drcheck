@@ -288,29 +288,46 @@ def check_networksdb_domain(domain, api_key=None):
         if response.status_code == 200:
             data = response.json()
             
-            # Extract IP addresses
+            # Extract IP addresses from API response
+            # API returns: {"total": N, "page": 1, "results": ["ip1", "ip2", ...]}
             ipv4_addresses = []
             ipv6_addresses = []
             
-            if isinstance(data, list):
-                for record in data:
-                    ip = record.get('ip')
-                    if ip:
-                        # Simple check for IPv4 vs IPv6
+            # Handle paginated response format
+            if isinstance(data, dict) and 'results' in data:
+                ip_list = data['results']
+                for ip in ip_list:
+                    # Simple check for IPv4 vs IPv6
+                    if ':' in ip:
+                        ipv6_addresses.append(ip)
+                    else:
+                        ipv4_addresses.append(ip)
+                
+                # Add total count from API
+                if 'total' in data:
+                    result['details']['total_records'] = data['total']
+            # Fallback: handle direct list format (for backwards compatibility)
+            elif isinstance(data, list):
+                for ip in data:
+                    if isinstance(ip, str):
                         if ':' in ip:
                             ipv6_addresses.append(ip)
                         else:
                             ipv4_addresses.append(ip)
             
             if ipv4_addresses:
-                result['details']['ipv4_addresses'] = ', '.join(ipv4_addresses)
+                result['details']['ipv4_addresses'] = ', '.join(ipv4_addresses[:10])  # Limit to first 10
+                if len(ipv4_addresses) > 10:
+                    result['details']['ipv4_count'] = len(ipv4_addresses)
             if ipv6_addresses:
-                result['details']['ipv6_addresses'] = ', '.join(ipv6_addresses)
+                result['details']['ipv6_addresses'] = ', '.join(ipv6_addresses[:10])  # Limit to first 10
+                if len(ipv6_addresses) > 10:
+                    result['details']['ipv6_count'] = len(ipv6_addresses)
             
             # Count total IPs
             total_ips = len(ipv4_addresses) + len(ipv6_addresses)
             if total_ips > 0:
-                result['details']['total_ips'] = total_ips
+                result['details']['resolved_ips'] = total_ips
         
         # If no data was collected, mark as no results
         if not result['details']:
@@ -1589,7 +1606,8 @@ def refresh_env_variables():
             'abusech': 'ABUSECH_API_KEY',
             'pdcp': 'PDCP_API_KEY',
             'alienvault_otx': 'ALIENVAULT_API_KEY',
-            'threatfox': 'THREATFOX_API_KEY'
+            'threatfox': 'THREATFOX_API_KEY',
+            'networksdb': 'NETWORKSDB_API_KEY'
         }
         
         loaded_count = sum(1 for env_var in env_mapping.values() if os.getenv(env_var))
@@ -1632,7 +1650,8 @@ def verify_api_keys():
             'abusech': 'ABUSECH_API_KEY',
             'pdcp': 'PDCP_API_KEY',
             'alienvault_otx': 'ALIENVAULT_API_KEY',
-            'threatfox': 'THREATFOX_API_KEY'
+            'threatfox': 'THREATFOX_API_KEY',
+            'networksdb': 'NETWORKSDB_API_KEY'
         }
         
         # Check environment variables
