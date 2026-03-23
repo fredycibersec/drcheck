@@ -16,6 +16,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from io import BytesIO
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 # Add CLI directory to path to import the domain checker module
 # Works both in Docker (cli/) and development (../Domain-Reputation-Checker/)
@@ -121,7 +122,8 @@ def get_api_keys():
         'abusech': 'ABUSECH_API_KEY',
         'pdcp': 'PDCP_API_KEY',
         'alienvault_otx': 'ALIENVAULT_API_KEY',
-        'threatfox': 'THREATFOX_API_KEY'
+        'threatfox': 'THREATFOX_API_KEY',
+        'networksdb': 'NETWORKSDB_API_KEY'
     }
     
     # Merge: prioritize encrypted config, fallback to environment
@@ -169,6 +171,289 @@ def get_country_from_ip(ip_address):
     except:
         pass
     return None
+
+def get_country_flag_emoji(country_code):
+    """Convert ISO country code to flag emoji"""
+    if not country_code or len(country_code) != 2:
+        return '🌐'
+    
+    # Convert country code to flag emoji
+    # Each country code letter maps to a regional indicator symbol
+    code = country_code.upper()
+    return chr(ord(code[0]) + 127397) + chr(ord(code[1]) + 127397)
+
+def check_networksdb_ip(ip_address, api_key=None):
+    """Check IP address with NetworksDB.io API (ip-info and ip-geo endpoints)"""
+    if not api_key:
+        return None
+    
+    import requests
+    
+    result = {
+        'source': 'NetworksDB.io',
+        'status': 'success',
+        'details': {}
+    }
+    
+    try:
+        # IP Info endpoint - Organization and network details
+        ip_info_url = f'https://networksdb.io/api/ip-info'
+        headers = {'X-Api-Key': api_key}
+        params = {'ip': ip_address}
+        
+        response = requests.get(ip_info_url, headers=headers, params=params, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            # Extract organization info
+            if 'organisation' in data:
+                org = data['organisation']
+                if org.get('name'):
+                    result['details']['organization'] = org['name']
+                if org.get('id'):
+                    result['details']['organization_id'] = org['id']
+            
+            # Extract network info
+            if 'network' in data:
+                net = data['network']
+                if net.get('cidr'):
+                    result['details']['network_cidr'] = net['cidr']
+                if net.get('range_start') and net.get('range_end'):
+                    result['details']['ip_range'] = f"{net['range_start']} - {net['range_end']}"
+        
+        # IP Geolocation endpoint - Geographic details
+        ip_geo_url = f'https://networksdb.io/api/ip-geo'
+        geo_response = requests.get(ip_geo_url, headers=headers, params=params, timeout=10)
+        
+        if geo_response.status_code == 200:
+            geo_data = geo_response.json()
+            
+            if geo_data.get('continent'):
+                result['details']['continent'] = geo_data['continent']
+            if geo_data.get('country'):
+                result['details']['country'] = geo_data['country']
+            if geo_data.get('state'):
+                result['details']['state'] = geo_data['state']
+            if geo_data.get('city'):
+                result['details']['city'] = geo_data['city']
+            if geo_data.get('latitude') and geo_data.get('longitude'):
+                result['details']['coordinates'] = f"{geo_data['latitude']}, {geo_data['longitude']}"
+        
+        # If no data was collected, mark as no results
+        if not result['details']:
+            result['status'] = 'no_results'
+            result['message'] = 'No information found'
+        
+        return result
+        
+    except requests.exceptions.Timeout:
+        return {
+            'source': 'NetworksDB.io',
+            'status': 'error',
+            'message': 'Request timeout'
+        }
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f'NetworksDB IP check failed: {str(e)}')
+        return {
+            'source': 'NetworksDB.io',
+            'status': 'error',
+            'message': 'API request failed'
+        }
+    except Exception as e:
+        app.logger.error(f'NetworksDB IP check error: {str(e)}')
+        return None
+
+def check_networksdb_domain(domain, api_key=None):
+    """Check domain with NetworksDB.io API (dns endpoint for forward lookup)"""
+    if not api_key:
+        return None
+    
+    import requests
+    
+    result = {
+        'source': 'NetworksDB.io',
+        'status': 'success',
+        'details': {}
+    }
+    
+    try:
+        # DNS endpoint - Forward DNS lookup
+        dns_url = f'https://networksdb.io/api/dns'
+        headers = {'X-Api-Key': api_key}
+        params = {'domain': domain}
+        
+        response = requests.get(dns_url, headers=headers, params=params, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            # Extract IP addresses
+            ipv4_addresses = []
+            ipv6_addresses = []
+            
+            if isinstance(data, list):
+                for record in data:
+                    ip = record.get('ip')
+                    if ip:
+                        # Simple check for IPv4 vs IPv6
+                        if ':' in ip:
+                            ipv6_addresses.append(ip)
+                        else:
+                            ipv4_addresses.append(ip)
+            
+            if ipv4_addresses:
+                result['details']['ipv4_addresses'] = ', '.join(ipv4_addresses)
+            if ipv6_addresses:
+                result['details']['ipv6_addresses'] = ', '.join(ipv6_addresses)
+            
+            # Count total IPs
+            total_ips = len(ipv4_addresses) + len(ipv6_addresses)
+            if total_ips > 0:
+                result['details']['total_ips'] = total_ips
+        
+        # If no data was collected, mark as no results
+        if not result['details']:
+            result['status'] = 'no_results'
+            result['message'] = 'No DNS records found'
+        
+        return result
+        
+    except requests.exceptions.Timeout:
+        return {
+            'source': 'NetworksDB.io',
+            'status': 'error',
+            'message': 'Request timeout'
+        }
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f'NetworksDB domain check failed: {str(e)}')
+        return {
+            'source': 'NetworksDB.io',
+            'status': 'error',
+            'message': 'API request failed'
+        }
+    except Exception as e:
+        app.logger.error(f'NetworksDB domain check error: {str(e)}')
+        return None
+
+def get_detailed_geolocation(ip_address, api_keys=None):
+    """Get detailed geolocation info from multiple sources (Tier 4 APIs)"""
+    import requests
+    
+    geolocation = {
+        'ip': ip_address,
+        'country': None,
+        'country_code': None,
+        'country_flag': '🌐',
+        'city': None,
+        'region': None,
+        'latitude': None,
+        'longitude': None,
+        'timezone': None,
+        'isp': None,
+        'organization': None,
+        'asn': None,
+        'is_proxy': False,
+        'is_vpn': False,
+        'is_tor': False,
+        'threat_level': 'low',
+        'sources_used': []
+    }
+    
+    # Try IP-API.com (Free, no key required - comprehensive data)
+    try:
+        response = requests.get(
+            f'http://ip-api.com/json/{ip_address}?fields=status,country,countryCode,region,city,lat,lon,timezone,isp,org,as,proxy,hosting',
+            timeout=5
+        )
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('status') == 'success':
+                geolocation['country'] = data.get('country')
+                geolocation['country_code'] = data.get('countryCode')
+                geolocation['country_flag'] = get_country_flag_emoji(data.get('countryCode'))
+                geolocation['city'] = data.get('city')
+                geolocation['region'] = data.get('region')
+                geolocation['latitude'] = data.get('lat')
+                geolocation['longitude'] = data.get('lon')
+                geolocation['timezone'] = data.get('timezone')
+                geolocation['isp'] = data.get('isp')
+                geolocation['organization'] = data.get('org')
+                geolocation['asn'] = data.get('as')
+                geolocation['is_proxy'] = data.get('proxy', False)
+                geolocation['is_vpn'] = data.get('hosting', False)  # hosting often indicates VPN/datacenter
+                geolocation['sources_used'].append('IP-API.com')
+    except Exception as e:
+        app.logger.debug(f'IP-API.com failed: {str(e)}')
+    
+    # Try IPData.co if API key available (Enhanced threat intelligence)
+    if api_keys and 'ipdata' in api_keys:
+        try:
+            response = requests.get(
+                f'https://api.ipdata.co/{ip_address}?api-key={api_keys["ipdata"]}',
+                timeout=5
+            )
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Fill in missing data or enhance existing
+                if not geolocation['country']:
+                    geolocation['country'] = data.get('country_name')
+                if not geolocation['country_code']:
+                    geolocation['country_code'] = data.get('country_code')
+                    geolocation['country_flag'] = get_country_flag_emoji(data.get('country_code'))
+                if not geolocation['city']:
+                    geolocation['city'] = data.get('city')
+                if not geolocation['region']:
+                    geolocation['region'] = data.get('region')
+                if not geolocation['latitude']:
+                    geolocation['latitude'] = data.get('latitude')
+                if not geolocation['longitude']:
+                    geolocation['longitude'] = data.get('longitude')
+                if not geolocation['timezone']:
+                    geolocation['timezone'] = data.get('time_zone', {}).get('name')
+                if not geolocation['isp']:
+                    geolocation['isp'] = data.get('asn', {}).get('name')
+                if not geolocation['asn']:
+                    geolocation['asn'] = data.get('asn', {}).get('asn')
+                
+                # Enhanced threat detection from IPData
+                threat_data = data.get('threat', {})
+                geolocation['is_tor'] = threat_data.get('is_tor', False)
+                geolocation['is_proxy'] = threat_data.get('is_proxy', False) or geolocation['is_proxy']
+                geolocation['is_vpn'] = threat_data.get('is_vpn', False) or geolocation['is_vpn']
+                
+                if threat_data.get('is_threat'):
+                    geolocation['threat_level'] = 'high'
+                elif geolocation['is_tor'] or geolocation['is_proxy']:
+                    geolocation['threat_level'] = 'medium'
+                
+                geolocation['sources_used'].append('IPData.co')
+        except Exception as e:
+            app.logger.debug(f'IPData.co failed: {str(e)}')
+    
+    # Try IPApi.co as fallback (Free alternative)
+    if not geolocation['country']:
+        try:
+            response = requests.get(f'https://ipapi.co/{ip_address}/json/', timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                if not data.get('error'):
+                    geolocation['country'] = data.get('country_name')
+                    geolocation['country_code'] = data.get('country_code')
+                    geolocation['country_flag'] = get_country_flag_emoji(data.get('country_code'))
+                    geolocation['city'] = data.get('city')
+                    geolocation['region'] = data.get('region')
+                    geolocation['latitude'] = data.get('latitude')
+                    geolocation['longitude'] = data.get('longitude')
+                    geolocation['timezone'] = data.get('timezone')
+                    geolocation['isp'] = data.get('org')
+                    geolocation['asn'] = data.get('asn')
+                    geolocation['sources_used'].append('IPApi.co')
+        except Exception as e:
+            app.logger.debug(f'IPApi.co failed: {str(e)}')
+    
+    return geolocation
 
 def add_search_stat(search_type, target, reputation, country=None):
     """Add a search to statistics"""
@@ -277,37 +562,62 @@ def check_domain():
         # Reset results for new check
         checker_instance.results = {}
         
-        # Parse sources if provided
-        if sources and sources != 'all':
-            sources_list = [s.strip() for s in sources.split(',')]
-        elif sources == 'all':
-            sources_list = ['all']
-        else:
-            sources_list = None
+        # Determine if it's a hash or domain BEFORE analysis
+        is_hash = re.match(r'^[a-f0-9]{32}$|^[a-f0-9]{40}$|^[a-f0-9]{64}$', domain)
         
-        # Perform the analysis
-        results = checker_instance.analyze_domain(
+        # Parse sources if provided, or filter based on input type
+        if is_hash:
+            # For hashes, only use sources that support hash lookups
+            hash_sources = ['virustotal', 'malware_bazaar', 'threatfox']
+            if sources and sources != 'all':
+                sources_list = [s.strip() for s in sources.split(',') if s.strip() in hash_sources]
+            else:
+                sources_list = hash_sources
+        else:
+            # For domains, use all sources or specified ones
+            if sources and sources != 'all':
+                sources_list = [s.strip() for s in sources.split(',')]
+            elif sources == 'all':
+                sources_list = ['all']
+            else:
+                sources_list = None
+        
+        # Perform the analysis with timeout (45 seconds) using ThreadPoolExecutor
+        executor = ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(
+            checker_instance.analyze_domain,
             domain,
-            sources=sources_list,
-            use_cache=False
+            sources_list,
+            False  # use_cache
         )
+        
+        try:
+            results = future.result(timeout=40)  # 40 second timeout (CLI now parallelizes with 20s per source)
+        except FuturesTimeoutError:
+            app.logger.error(f'Analysis timed out for {domain}')
+            executor.shutdown(wait=False)
+            return jsonify({'error': 'Analysis timed out after 40 seconds. The CLI parallelizes requests, but some APIs may be slow.'}), 504
+        finally:
+            executor.shutdown(wait=False)
         
         # Calculate overall reputation
         overall_reputation = checker_instance.calculate_overall_reputation()
         
-        # Determine if it's a hash or domain
-        is_hash = re.match(r'^[a-f0-9]{32}$|^[a-f0-9]{40}$|^[a-f0-9]{64}$', domain)
+        # Use the hash detection from earlier
         search_type = 'hash' if is_hash else 'domain'
         
         # Track statistics - get country from whois or IP resolution
         country = results.get('whois_info', {}).get('country', None)
         
-        # Fallback: if no country from whois and it's a domain, try to resolve to IP and get country
-        if not country and search_type == 'domain':
+        # Resolve IP address for domains (not hashes)
+        resolved_ip = None
+        if search_type == 'domain':
             try:
                 import socket
-                ip_addr = socket.gethostbyname(domain)
-                country = get_country_from_ip(ip_addr)
+                resolved_ip = socket.gethostbyname(domain)
+                # Also get country from resolved IP if not from whois
+                if not country:
+                    country = get_country_from_ip(resolved_ip)
             except:
                 pass
         
@@ -385,12 +695,38 @@ def check_domain():
             
             formatted_results.append(formatted_result)
         
-        return jsonify({
+        # NetworksDB Check for domains (not hashes)
+        if not is_hash:
+            api_keys = get_api_keys()
+            if api_keys.get('networksdb'):
+                try:
+                    networksdb_result = check_networksdb_domain(domain, api_keys['networksdb'])
+                    if networksdb_result:
+                        # Format NetworksDB result to match frontend structure
+                        formatted_networksdb = {
+                            'source': networksdb_result.get('source', 'NetworksDB.io'),
+                            'source_id': 'networksdb',
+                            'status': networksdb_result.get('status', 'unknown'),
+                            'reputation': 'unknown',  # NetworksDB is informational, not reputation
+                            'message': networksdb_result.get('message', ''),
+                            'details': networksdb_result.get('details', {})
+                        }
+                        formatted_results.append(formatted_networksdb)
+                except Exception as e:
+                    app.logger.error(f'NetworksDB domain check failed: {str(e)}')
+        
+        response_data = {
             'domain': domain,
             'overall_reputation': overall_reputation,
             'results': formatted_results,
             'timestamp': checker_instance.results.get('timestamp', None)
-        })
+        }
+        
+        # Add resolved IP if available
+        if resolved_ip:
+            response_data['resolved_ip'] = resolved_ip
+        
+        return jsonify(response_data)
         
     except Exception as e:
         app.logger.error(f'Analysis failed for {domain}: {str(e)}')
@@ -778,7 +1114,7 @@ def export_csv():
 @app.route('/api/check-ip', methods=['POST'])
 @limiter.limit("10 per minute")
 def check_ip():
-    """API endpoint to check IP reputation - Simplified integrated version"""
+    """API endpoint to check IP reputation - Enhanced with API integrations"""
     data = request.get_json()
     
     if not data or 'ip' not in data:
@@ -796,57 +1132,173 @@ def check_ip():
         return jsonify({'error': 'Invalid IP address range'}), 400
     
     try:
+        # Get the checker instance with configured APIs
+        checker_instance = get_checker()
+        
+        if not checker_instance:
+            return jsonify({'error': 'Domain reputation checker not available'}), 500
+        
+        # Reset results for new check
+        checker_instance.results = {}
+        
+        # Call AbuseIPDB if available
+        formatted_results = {}
+        overall_score = 0
+        scores_count = 0
+        
+        # AbuseIPDB Check
+        if 'abuseipdb' in checker_instance.api_keys:
+            try:
+                abuseipdb_result = checker_instance.check_abuseipdb(ip_address)
+                if abuseipdb_result and abuseipdb_result.get('status') == 'success':
+                    formatted_results['abuseipdb'] = {
+                        'source': 'AbuseIPDB',
+                        'status': 'success',
+                        'reputation': abuseipdb_result.get('reputation', 'unknown'),
+                        'details': {
+                            'confidence': abuseipdb_result.get('abuse_confidence', 0),
+                            'reports': abuseipdb_result.get('total_reports', 0),
+                            'last_reported': abuseipdb_result.get('last_reported', 'N/A'),
+                            'country': abuseipdb_result.get('country', 'Unknown'),
+                            'isp': abuseipdb_result.get('isp', 'Unknown')
+                        }
+                    }
+                    
+                    # Weight score based on confidence
+                    if abuseipdb_result.get('reputation') == 'malicious':
+                        overall_score -= 3
+                    elif abuseipdb_result.get('reputation') == 'suspicious':
+                        overall_score -= 2
+                    elif abuseipdb_result.get('reputation') == 'clean':
+                        overall_score += 1
+                    scores_count += 1
+            except Exception as e:
+                app.logger.error(f'AbuseIPDB check failed: {str(e)}')
+                formatted_results['abuseipdb'] = {
+                    'source': 'AbuseIPDB',
+                    'status': 'error',
+                    'message': 'Check failed'
+                }
+        
+        # VirusTotal IP Check
+        if 'virustotal' in checker_instance.api_keys:
+            try:
+                import requests
+                vt_url = f"https://www.virustotal.com/api/v3/ip_addresses/{ip_address}"
+                headers = {'x-apikey': checker_instance.api_keys['virustotal']}
+                response = requests.get(vt_url, headers=headers, timeout=10)
+                
+                if response.status_code == 200:
+                    vt_data = response.json().get('data', {}).get('attributes', {})
+                    stats = vt_data.get('last_analysis_stats', {})
+                    malicious = stats.get('malicious', 0)
+                    suspicious = stats.get('suspicious', 0)
+                    
+                    vt_reputation = 'clean'
+                    if malicious >= 5:
+                        vt_reputation = 'malicious'
+                        overall_score -= 3
+                    elif malicious >= 2 or suspicious >= 5:
+                        vt_reputation = 'suspicious'
+                        overall_score -= 2
+                    else:
+                        overall_score += 1
+                    
+                    formatted_results['virustotal'] = {
+                        'source': 'VirusTotal',
+                        'status': 'success',
+                        'reputation': vt_reputation,
+                        'details': {
+                            'malicious': malicious,
+                            'suspicious': suspicious,
+                            'harmless': stats.get('harmless', 0),
+                            'undetected': stats.get('undetected', 0),
+                            'country': vt_data.get('country', 'Unknown'),
+                            'as_owner': vt_data.get('as_owner', 'Unknown')
+                        }
+                    }
+                    scores_count += 1
+            except Exception as e:
+                app.logger.error(f'VirusTotal IP check failed: {str(e)}')
+                formatted_results['virustotal'] = {
+                    'source': 'VirusTotal',
+                    'status': 'error',
+                    'message': 'Check failed'
+                }
+        
+        # NetworksDB Check
+        api_keys = get_api_keys()
+        if api_keys.get('networksdb'):
+            try:
+                networksdb_result = check_networksdb_ip(ip_address, api_keys['networksdb'])
+                if networksdb_result:
+                    formatted_results['networksdb'] = networksdb_result
+            except Exception as e:
+                app.logger.error(f'NetworksDB IP check failed: {str(e)}')
+                formatted_results['networksdb'] = {
+                    'source': 'NetworksDB.io',
+                    'status': 'error',
+                    'message': 'Check failed'
+                }
+        
+        # DNS Blacklist checks (comprehensive list - 30+ important blacklists)
         import socket
         from concurrent.futures import ThreadPoolExecutor, as_completed
-        import json as json_module
         
-        # Quick blacklist checks (top 20 most important)
         blacklists = [
-            'zen.spamhaus.org',
-            'bl.spamcop.net',
-            'b.barracudacentral.org',
-            'dnsbl.sorbs.net',
-            'bl.blocklist.de',
-            'spam.dnsbl.sorbs.net',
-            'dnsbl-1.uceprotect.net',
-            'psbl.surriel.com',
-            'ubl.unsubscore.com',
-            'cbl.abuseat.org',
-            'dyna.spamrats.com',
-            'http.dnsbl.sorbs.net',
-            'misc.dnsbl.sorbs.net',
-            'smtp.dnsbl.sorbs.net',
-            'socks.dnsbl.sorbs.net',
-            'spam.spamrats.com',
-            'web.dnsbl.sorbs.net',
-            'zombie.dnsbl.sorbs.net',
-            'rbl.realtimeblacklist.com',
-            'noptr.spamrats.com'
+            # Tier 1 - Most Important (High Authority)
+            'zen.spamhaus.org',          # Spamhaus combined list
+            'bl.spamcop.net',            # SpamCop
+            'b.barracudacentral.org',    # Barracuda
+            'dnsbl.sorbs.net',           # SORBS aggregate
+            'bl.blocklist.de',           # Blocklist.de
+            'cbl.abuseat.org',           # Composite Blocking List
+            'psbl.surriel.com',          # Passive Spam Block List
+            
+            # Tier 2 - Important (Widely Used)
+            'dnsbl-1.uceprotect.net',    # UCEProtect Level 1
+            'dnsbl-2.uceprotect.net',    # UCEProtect Level 2
+            'spam.dnsbl.sorbs.net',      # SORBS spam sources
+            'http.dnsbl.sorbs.net',      # SORBS HTTP proxies
+            'misc.dnsbl.sorbs.net',      # SORBS misc
+            'smtp.dnsbl.sorbs.net',      # SORBS SMTP
+            'socks.dnsbl.sorbs.net',     # SORBS SOCKS
+            'web.dnsbl.sorbs.net',       # SORBS web servers
+            'zombie.dnsbl.sorbs.net',    # SORBS zombies
+            
+            # Tier 3 - Additional Coverage
+            'dyna.spamrats.com',         # SpamRats dynamic
+            'spam.spamrats.com',         # SpamRats spam
+            'noptr.spamrats.com',        # SpamRats no PTR
+            'ubl.unsubscore.com',        # Lashback UBL
+            'rbl.realtimeblacklist.com', # RBL
+            'ix.dnsbl.manitu.net',       # NiX Spam
+            'dnsbl.inps.de',             # INPS
+            'bl.mailspike.net',          # Mailspike
+            'bl.spameatingmonkey.net',   # Spam Eating Monkey
+            'dnsbl.cobion.com',          # Cobion
+            'rbl.efnetrbl.org',          # EFnet RBL
+            'blackholes.mail-abuse.org', # MAPS RBL
+            'dnsbl.httpbl.org',          # Project Honey Pot
+            'truncate.gbudb.net'         # GBUdb
         ]
         
         def check_blacklist(bl_domain):
-            """Check if IP is listed in blacklist"""
             reversed_ip = '.'.join(reversed(ip_address.split('.')))
             query = f"{reversed_ip}.{bl_domain}"
             try:
                 socket.gethostbyname(query)
-                return {'blacklist': bl_domain, 'listed': True}
-            except socket.gaierror:
-                return {'blacklist': bl_domain, 'listed': False}
-            except Exception:
-                return {'blacklist': bl_domain, 'listed': False}
+                return True
+            except:
+                return False
         
-        # Check blacklists in parallel (fast)
         blacklist_results = []
-        listed_count = 0
-        
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=15) as executor:  # Increased for faster parallel checks
             futures = {executor.submit(check_blacklist, bl): bl for bl in blacklists}
             for future in as_completed(futures):
-                result = future.result()
-                if result['listed']:
-                    listed_count += 1
-                    blacklist_results.append(result['blacklist'])
+                bl = futures[future]
+                if future.result():
+                    blacklist_results.append(bl)
         
         # Get hostname
         try:
@@ -854,44 +1306,103 @@ def check_ip():
         except:
             hostname = 'No hostname'
         
-        # Determine reputation
-        if listed_count >= 3:
-            reputation = 'malicious'
-        elif listed_count >= 1:
-            reputation = 'suspicious'
-        else:
-            reputation = 'clean'
-        
-        # Basic geolocation (would require API key for full data)
-        # Using simple heuristics for demo
-        results = {
-            'blacklist_check': {
+        formatted_results['blacklist_check'] = {
+            'source': 'DNS Blacklists (30+ Sources)',
+            'status': 'success',
+            'details': {
                 'checked': len(blacklists),
-                'listed': listed_count,
-                'clean': len(blacklists) - listed_count,
-                'blacklists': blacklist_results[:10] if blacklist_results else ['None']
-            },
-            'basic_info': {
-                'ip': ip_address,
-                'hostname': hostname,
-                'reversed_dns': hostname if hostname != 'No hostname' else 'Not available'
-            },
-            'analysis': {
-                'reputation_score': f"{max(0, 100 - (listed_count * 15))}/100",
-                'threat_level': 'High' if listed_count >= 3 else 'Medium' if listed_count >= 1 else 'Low',
-                'recommendation': 'Block' if listed_count >= 3 else 'Monitor' if listed_count >= 1 else 'Allow'
+                'listed': len(blacklist_results),
+                'blacklists': blacklist_results if blacklist_results else [],
+                'hostname': hostname
             }
         }
         
-        # Track statistics - get country from IP
+        # Get detailed geolocation with Tier 4 APIs
+        api_keys = get_api_keys()
+        geolocation = get_detailed_geolocation(ip_address, api_keys)
+        
+        # Format geolocation as a separate result card
+        geo_details = {}
+        if geolocation['country']:
+            geo_details['location'] = f"{geolocation['country_flag']} {geolocation['country']}"
+        if geolocation['city'] and geolocation['region']:
+            geo_details['city_region'] = f"{geolocation['city']}, {geolocation['region']}"
+        elif geolocation['city']:
+            geo_details['city'] = geolocation['city']
+        elif geolocation['region']:
+            geo_details['region'] = geolocation['region']
+        if geolocation['latitude'] and geolocation['longitude']:
+            geo_details['coordinates'] = f"{geolocation['latitude']}, {geolocation['longitude']}"
+        if geolocation['timezone']:
+            geo_details['timezone'] = geolocation['timezone']
+        if geolocation['isp']:
+            geo_details['isp'] = geolocation['isp']
+        if geolocation['organization']:
+            geo_details['organization'] = geolocation['organization']
+        if geolocation['asn']:
+            geo_details['asn'] = geolocation['asn']
+        
+        # Threat indicators
+        threat_indicators = []
+        if geolocation['is_tor']:
+            threat_indicators.append('🔒 Tor Exit Node')
+        if geolocation['is_proxy']:
+            threat_indicators.append('🌐 Proxy Server')
+        if geolocation['is_vpn']:
+            threat_indicators.append('🛡️ VPN/Datacenter')
+        
+        if threat_indicators:
+            geo_details['threat_indicators'] = ', '.join(threat_indicators)
+            geo_details['threat_level'] = geolocation['threat_level'].upper()
+        
+        if geolocation['sources_used']:
+            geo_details['data_sources'] = ', '.join(geolocation['sources_used'])
+        
+        formatted_results['geolocation'] = {
+            'source': 'Geolocation & Network Info',
+            'status': 'success',
+            'details': geo_details
+        }
+        
+        # Add blacklist score (adjusted for 30+ blacklists)
+        listed_percentage = (len(blacklist_results) / len(blacklists)) * 100
+        
+        if listed_percentage >= 20:  # Listed in 20%+ of blacklists (6+)
+            overall_score -= 3
+        elif listed_percentage >= 10:  # Listed in 10-20% (3-5)
+            overall_score -= 2
+        elif listed_percentage >= 3:   # Listed in 3-10% (1-2)
+            overall_score -= 1
+        else:  # Clean or minimal listings
+            overall_score += 0.5
+        scores_count += 1
+        
+        # Calculate final reputation
+        if scores_count > 0:
+            avg_score = overall_score / scores_count
+            if avg_score <= -1.5:
+                reputation = 'malicious'
+            elif avg_score <= -0.5:
+                reputation = 'suspicious'
+            elif avg_score <= 0.3:
+                reputation = 'questionable'
+            else:
+                reputation = 'clean'
+        else:
+            reputation = 'unknown'
+        
+        # Track statistics
         country = get_country_from_ip(ip_address)
         add_search_stat('ip', ip_address, reputation, country)
-        app.logger.info(f'IP analysis completed: {ip_address} - {reputation} (listed in {listed_count} blacklists) - Country: {country}')
+        app.logger.info(f'IP analysis completed: {ip_address} - {reputation} (APIs used: {len(formatted_results)})')
+        
+        # Convert formatted_results dict to list for frontend compatibility
+        results_list = list(formatted_results.values())
         
         return jsonify({
             'ip': ip_address,
             'reputation': reputation,
-            'results': results
+            'results': results_list
         })
         
     except Exception as e:
@@ -954,8 +1465,10 @@ def get_api_status():
             'ipdata': 'IPDATA_API_KEY',
             'apivoid': 'APIVOID_KEY',
             'abusech': 'ABUSECH_API_KEY',
+            'pdcp': 'PDCP_API_KEY',
             'alienvault_otx': 'ALIENVAULT_API_KEY',
-            'threatfox': 'THREATFOX_API_KEY'
+            'threatfox': 'THREATFOX_API_KEY',
+            'networksdb': 'NETWORKSDB_API_KEY'
         }
         
         # Determine source for each key
@@ -980,6 +1493,7 @@ def get_api_status():
             'securitytrails': {'name': 'SecurityTrails', 'tier': 3, 'description': 'Histórico DNS', 'configured': bool(all_keys.get('securitytrails')), 'source': get_key_source('securitytrails')},
             'ipapi': {'name': 'IP-API', 'tier': 4, 'description': 'Geolocalización de IPs', 'configured': bool(all_keys.get('ipapi')), 'source': get_key_source('ipapi')},
             'ipdata': {'name': 'IPData', 'tier': 4, 'description': 'Geolocalización alternativa', 'configured': bool(all_keys.get('ipdata')), 'source': get_key_source('ipdata')},
+            'networksdb': {'name': 'NetworksDB.io', 'tier': 4, 'description': 'Información de redes y organizaciones', 'configured': bool(all_keys.get('networksdb')), 'source': get_key_source('networksdb')},
         }
         
         return jsonify({
@@ -1044,6 +1558,59 @@ def save_api_config():
         app.logger.error(f'Error saving API config: {str(e)}')
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/config/refresh-env', methods=['POST'])
+def refresh_env_variables():
+    """Reload environment variables from flask-app.env file"""
+    try:
+        from dotenv import load_dotenv
+        
+        # Path to flask-app.env
+        env_file = os.path.join(os.path.dirname(__file__), 'flask-app.env')
+        
+        if not os.path.exists(env_file):
+            return jsonify({
+                'error': 'flask-app.env not found',
+                'message': 'Create a flask-app.env file with your API keys'
+            }), 404
+        
+        # Reload environment variables from file
+        load_dotenv(env_file, override=True)
+        
+        # Count loaded APIs
+        env_mapping = {
+            'virustotal': 'VIRUSTOTAL_API_KEY',
+            'abuseipdb': 'ABUSEIPDB_API_KEY',
+            'securitytrails': 'ST_API_KEY',
+            'shodan': 'SHODAN_API_KEY',
+            'urlscan': 'URLSCAN_API_KEY',
+            'ipapi': 'IPAPI_ACCESS_KEY',
+            'ipdata': 'IPDATA_API_KEY',
+            'apivoid': 'APIVOID_KEY',
+            'abusech': 'ABUSECH_API_KEY',
+            'pdcp': 'PDCP_API_KEY',
+            'alienvault_otx': 'ALIENVAULT_API_KEY',
+            'threatfox': 'THREATFOX_API_KEY'
+        }
+        
+        loaded_count = sum(1 for env_var in env_mapping.values() if os.getenv(env_var))
+        
+        app.logger.info(f'Environment variables reloaded: {loaded_count} API keys found')
+        
+        # Reinitialize checker with new keys
+        global checker
+        checker = None  # Force reinitialization
+        get_checker()   # Reinitialize with new keys
+        
+        return jsonify({
+            'success': True,
+            'loaded': loaded_count,
+            'message': f'{loaded_count} API keys loaded from environment'
+        })
+        
+    except Exception as e:
+        app.logger.error(f'Error refreshing environment variables: {str(e)}')
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/config/verify', methods=['GET'])
 def verify_api_keys():
     """Verify all configured API keys from both config and environment"""
@@ -1063,6 +1630,7 @@ def verify_api_keys():
             'ipdata': 'IPDATA_API_KEY',
             'apivoid': 'APIVOID_KEY',
             'abusech': 'ABUSECH_API_KEY',
+            'pdcp': 'PDCP_API_KEY',
             'alienvault_otx': 'ALIENVAULT_API_KEY',
             'threatfox': 'THREATFOX_API_KEY'
         }

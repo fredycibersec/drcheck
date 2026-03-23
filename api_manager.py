@@ -159,7 +159,8 @@ class APIKeyManager:
             'hybrid_analysis', 'malware_bazaar', 'shodan', 'urlvoid',
             'securitytrails', 'whois_info', 'criminalip', 'cisco_talos',
             'mxtoolbox', 'ip_geolocation', 'viewdns', 'centralops',
-            'dnslytics', 'ipthc', 'synapsint', 'ipapi', 'ipdata', 'apivoid'
+            'dnslytics', 'ipthc', 'synapsint', 'ipapi', 'ipdata', 'apivoid',
+            'networksdb'
         ]
         
         return {source: bool(api_keys.get(source)) for source in all_sources}
@@ -193,7 +194,8 @@ class APIKeyManager:
             'ipdata': 'IPDATA_API_KEY',
             'apivoid': 'APIVOID_KEY',
             'abusech': 'ABUSECH_API_KEY',
-            'pdcp': 'PDCP_API_KEY'
+            'pdcp': 'PDCP_API_KEY',
+            'networksdb': 'NETWORKSDB_API_KEY'
         }
         
         for source, api_key in api_keys.items():
