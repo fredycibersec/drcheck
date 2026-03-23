@@ -61,8 +61,8 @@
 
 ### 1. Clonar el Repositorio
 ```bash
-git clone https://github.com/tu-usuario/Domain-Reputation-WebApp.git
-cd Domain-Reputation-WebApp
+git clone https://github.com/tu-usuario/drcheck.git
+cd drcheck
 ```
 
 ### 2. Crear Entorno Virtual
