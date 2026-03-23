@@ -463,6 +463,11 @@ async function performSearch(type, value) {
     if (error) error.style.display = 'none';
     if (checkBtn) checkBtn.disabled = true;
     
+    // Show progress terminal for domain searches
+    if (type === 'domain') {
+        initProgressTerminal(value);
+    }
+    
     try {
         let endpoint, body;
         
@@ -474,27 +479,113 @@ async function performSearch(type, value) {
             body = { domain: value };
         }
         
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
-        
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Error en el análisis');
-        
-        displayResults(type, data);
-        
+        // Simulate progressive API calls for domain searches
         if (type === 'domain') {
-            currentAnalysisData = data;
-            if (resetBtn) resetBtn.style.display = 'inline-flex';
+            await performSearchWithProgress(endpoint, body, value);
+        } else {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Error en el análisis');
+            
+            displayResults(type, data);
         }
     } catch (err) {
+        if (type === 'domain') {
+            addTerminalLine('error', `✗ Error: ${err.message}`);
+            addTerminalLine('info', '\n💡 Usa el botón [×] para cerrar esta terminal');
+        }
         showError(type, err.message);
     } finally {
         if (loading) loading.style.display = 'none';
         if (checkBtn) checkBtn.disabled = false;
     }
+}
+
+async function performSearchWithProgress(endpoint, body, value) {
+    // Add initial progress messages
+    addTerminalLine('info', '🚀 Iniciando análisis de dominio...');
+    await sleep(400);
+    
+    addTerminalLine('info', '📡 Conectando con fuentes de inteligencia...');
+    await sleep(300);
+    
+    // Make actual API call
+    const startTime = Date.now();
+    // Backend now handles parallelization with individual timeouts
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+    
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Error en el análisis');
+    
+    // Show results from each API source
+    addTerminalLine('info', '\n📊 Resultados por fuente:');
+    await sleep(200);
+    
+    if (data.results && data.results.length > 0) {
+        for (const result of data.results) {
+            await sleep(150);
+            
+            let statusIcon = '';
+            let statusType = 'info';
+            let statusText = '';
+            
+            // Determine status based on result
+            if (result.status === 'success' || result.status === 'clean') {
+                statusIcon = '✓';
+                statusType = 'success';
+                statusText = result.reputation ? `[${result.reputation.toUpperCase()}]` : '[OK]';
+            } else if (result.status === 'error') {
+                statusIcon = '✗';
+                statusType = 'error';
+                statusText = '[ERROR]';
+            } else if (result.status === 'suspicious' || result.status === 'malicious') {
+                statusIcon = '⚠';
+                statusType = 'warning';
+                statusText = `[${result.status.toUpperCase()}]`;
+            } else if (result.status === 'info') {
+                statusIcon = 'ℹ';
+                statusType = 'info';
+                statusText = '[INFO]';
+            } else {
+                statusIcon = '○';
+                statusType = 'info';
+                statusText = `[${result.status || 'N/A'}]`;
+            }
+            
+            const sourceName = result.source || 'Unknown';
+            const message = `${statusIcon} ${sourceName.padEnd(20)} ${statusText}`;
+            addTerminalLine(statusType, message);
+        }
+    }
+    
+    await sleep(300);
+    
+    // Show summary
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    const totalSources = data.results?.length || 0;
+    const successCount = data.results?.filter(r => r.status === 'success' || r.status === 'clean').length || 0;
+    
+    addTerminalLine('info', '\n' + '─'.repeat(50));
+    addTerminalLine('success', `✓ Análisis completado en ${elapsed}s`);
+    addTerminalLine('info', `📊 Total: ${totalSources} fuentes | ✓ Exitosas: ${successCount}`);
+    addTerminalLine('info', `🎯 Reputación general: ${data.overall_reputation?.toUpperCase() || 'UNKNOWN'}`);
+    
+    await sleep(800);
+    
+    // Display results (keep terminal visible)
+    displayResults('domain', data);
+    
+    currentAnalysisData = data;
+    if (resetBtn) resetBtn.style.display = 'inline-flex';
 }
 
 function showError(type, message) {
@@ -514,6 +605,8 @@ function displayResults(type, data) {
     
     if (type === 'ip') {
         displayIPResults(data);
+    } else if (type === 'hash') {
+        displayHashResults(data);
     } else {
         displayDomainResults(data);
     }
@@ -534,10 +627,49 @@ function displayIPResults(data) {
     
     if (resultsGrid && data.results) {
         resultsGrid.innerHTML = '';
-        Object.entries(data.results).forEach(([key, value]) => {
-            const card = createInfoCard(key, value);
+        // data.results is an array, iterate directly
+        data.results.forEach(result => {
+            const card = createSourceCard(result);
             resultsGrid.appendChild(card);
         });
+    }
+}
+
+function displayHashResults(data) {
+    const overallRep = document.getElementById('hashOverallReputation');
+    const resultsGrid = document.getElementById('hashResultsGrid');
+    
+    if (overallRep) {
+        const reputation = data.overall_reputation || 'unknown';
+        overallRep.innerHTML = `
+            <h3>Hash: <span style="color: var(--text-primary); font-family: monospace; font-size: 0.9rem;">${data.domain}</span></h3>
+            <div class="reputation-badge reputation-${reputation}">
+                ${getReputationEmoji(reputation)} ${reputation.toUpperCase()}
+            </div>
+        `;
+    }
+    
+    if (resultsGrid && data.results) {
+        resultsGrid.innerHTML = '';
+        
+        // Separate automated and manual results
+        const automated = [];
+        const manual = [];
+        
+        data.results.forEach(r => r.status === 'info' ? manual.push(r) : automated.push(r));
+        
+        // Display automated results
+        automated.forEach(result => resultsGrid.appendChild(createSourceCard(result)));
+        
+        // Display manual investigation if needed
+        if (manual.length > 0) {
+            const manualSection = document.createElement('div');
+            manualSection.style.cssText = 'margin-top: var(--space-6); padding-top: var(--space-6); border-top: 1px solid var(--border-primary);';
+            manualSection.innerHTML = '<h4 style="color: var(--text-primary); margin-bottom: var(--space-4);">🔍 Investigación Manual Requerida</h4>';
+            
+            manual.forEach(result => manualSection.appendChild(createSourceCard(result)));
+            resultsGrid.appendChild(manualSection);
+        }
     }
 }
 
@@ -548,11 +680,28 @@ function displayDomainResults(data) {
     
     if (overallRep) {
         const reputation = data.overall_reputation;
+        let ipButtonHTML = '';
+        
+        // Add button to analyze resolved IP if available
+        if (data.resolved_ip) {
+            ipButtonHTML = `
+                <button onclick="analyzeResolvedIP('${data.resolved_ip}')" 
+                        class="btn btn-secondary" 
+                        style="margin-top: var(--space-4); display: inline-flex; align-items: center; gap: var(--space-2);">
+                    <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                    </svg>
+                    Analizar IP: ${data.resolved_ip}
+                </button>
+            `;
+        }
+        
         overallRep.innerHTML = `
             <h3>Dominio: <span style="color: var(--text-primary);">${data.domain}</span></h3>
             <div class="reputation-badge reputation-${reputation}">
                 ${getReputationEmoji(reputation)} ${reputation.toUpperCase()}
             </div>
+            ${ipButtonHTML}
         `;
     }
     
@@ -599,7 +748,27 @@ function createInfoCard(title, data) {
         content += '<ul style="list-style: none; padding: 0;">';
         for (const [key, value] of Object.entries(data)) {
             if (value === null || value === undefined) continue;
-            const displayValue = Array.isArray(value) ? value.join(', ') : value.toString();
+            
+            let displayValue;
+            if (Array.isArray(value)) {
+                if (value.length > 0 && typeof value[0] === 'object' && value[0] !== null) {
+                    displayValue = value.map(obj => {
+                        const entries = Object.entries(obj)
+                            .filter(([k, v]) => v !== null && v !== undefined && v !== '')
+                            .map(([k, v]) => {
+                                const formattedKey = k.replace(/_/g, ' ');
+                                const formattedValue = Array.isArray(v) ? v.join(', ') : v;
+                                return `${formattedKey}: ${formattedValue}`;
+                            });
+                        return entries.join(' | ');
+                    }).join('<br>');
+                } else {
+                    displayValue = value.join(', ');
+                }
+            } else {
+                displayValue = value.toString();
+            }
+            
             content += `<li style="padding: var(--space-2) 0; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between;"><span style="color: var(--text-secondary);">${key}:</span><span style="color: var(--text-primary); font-weight: 600;">${displayValue}</span></li>`;
         }
         content += '</ul>';
@@ -620,8 +789,9 @@ function createSourceCard(result) {
                        result.status === 'error' ? 'status-error' : 'status-info';
     
     let reputationHTML = '';
-    if (result.status === 'success') {
-        reputationHTML = `<div class="reputation-indicator reputation-${result.reputation}" style="padding: var(--space-3); border-radius: var(--radius-md); margin: var(--space-3) 0; font-weight: 600; text-align: center;">${getReputationEmoji(result.reputation)} ${result.reputation.toUpperCase()}</div>`;
+    if (result.status === 'success' && result.reputation) {
+        const reputation = result.reputation || 'unknown';
+        reputationHTML = `<div class="reputation-indicator reputation-${reputation}" style="padding: var(--space-3); border-radius: var(--radius-md); margin: var(--space-3) 0; font-weight: 600; text-align: center;">${getReputationEmoji(reputation)} ${reputation.toUpperCase()}</div>`;
     }
     
     let detailsHTML = '';
@@ -630,7 +800,30 @@ function createSourceCard(result) {
         for (const [key, value] of Object.entries(result.details)) {
             if (value === null || value === undefined || value === '') continue;
             const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-            const displayValue = Array.isArray(value) ? value.join(', ') : value.toString();
+            
+            let displayValue;
+            if (Array.isArray(value)) {
+                // Check if array contains objects
+                if (value.length > 0 && typeof value[0] === 'object' && value[0] !== null) {
+                    // Format array of objects (e.g., recent_attacks from AbuseIPDB)
+                    displayValue = value.map(obj => {
+                        const entries = Object.entries(obj)
+                            .filter(([k, v]) => v !== null && v !== undefined && v !== '')
+                            .map(([k, v]) => {
+                                const formattedKey = k.replace(/_/g, ' ');
+                                const formattedValue = Array.isArray(v) ? v.join(', ') : v;
+                                return `${formattedKey}: ${formattedValue}`;
+                            });
+                        return entries.join(' | ');
+                    }).join('<br>');
+                } else {
+                    // Simple array of primitives
+                    displayValue = value.join(', ');
+                }
+            } else {
+                displayValue = value.toString();
+            }
+            
             detailsHTML += `<li style="padding: var(--space-2) 0; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between;"><span style="color: var(--text-secondary);">${label}:</span><span style="color: var(--text-primary); font-weight: 600; text-align: right;">${displayValue}</span></li>`;
         }
         detailsHTML += '</ul>';
@@ -867,129 +1060,129 @@ function renderThreatMap(threats) {
                 <img src="static/img/world-map.svg" style="width: 100%; max-height: 350px; object-fit: contain; display: block; opacity: ${isDark ? '0.5' : '0.7'}; filter: ${isDark ? 'brightness(0.8) contrast(1.1)' : 'brightness(1)'};"/>
                 
                 <!-- SVG Overlay para colorear países según amenazas -->
-                <svg viewBox="150 500 1800 900" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;" preserveAspectRatio="xMidYMid meet">
+                <svg viewBox="150 -300 1800 900" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;" preserveAspectRatio="xMidYMid meet">
                     <!-- Países con amenazas coloreados -->
                     
                     <!-- América del Norte -->
                     ${threatIntensity['US'] ? `
-                    <ellipse cx="450" cy="650" rx="180" ry="120" fill="${getCountryColor('US')}" opacity="0.6">
+                    <ellipse cx="450" cy="-60" rx="180" ry="120" fill="${getCountryColor('US')}" opacity="0.6">
                         <title>US (United States): ${threatIntensity['US']} amenazas</title>
                     </ellipse>` : ''}
                     
                     ${threatIntensity['CA'] ? `
-                    <ellipse cx="450" cy="550" rx="200" ry="80" fill="${getCountryColor('CA')}" opacity="0.6">
+                    <ellipse cx="450" cy="-160" rx="200" ry="80" fill="${getCountryColor('CA')}" opacity="0.6">
                         <title>CA (Canada): ${threatIntensity['CA']} amenazas</title>
                     </ellipse>` : ''}
                     
                     ${threatIntensity['MX'] ? `
-                    <ellipse cx="450" cy="780" rx="80" ry="60" fill="${getCountryColor('MX')}" opacity="0.6">
+                    <ellipse cx="450" cy="70" rx="80" ry="60" fill="${getCountryColor('MX')}" opacity="0.6">
                         <title>MX (Mexico): ${threatIntensity['MX']} amenazas</title>
                     </ellipse>` : ''}
                     
                     <!-- América del Sur -->
                     ${threatIntensity['BR'] ? `
-                    <ellipse cx="650" cy="1050" rx="120" ry="140" fill="${getCountryColor('BR')}" opacity="0.6">
+                    <ellipse cx="650" cy="340" rx="120" ry="140" fill="${getCountryColor('BR')}" opacity="0.6">
                         <title>BR (Brazil): ${threatIntensity['BR']} amenazas</title>
                     </ellipse>` : ''}
                     
                     ${threatIntensity['AR'] ? `
-                    <ellipse cx="600" cy="1200" rx="70" ry="100" fill="${getCountryColor('AR')}" opacity="0.6">
+                    <ellipse cx="600" cy="490" rx="70" ry="100" fill="${getCountryColor('AR')}" opacity="0.6">
                         <title>AR (Argentina): ${threatIntensity['AR']} amenazas</title>
                     </ellipse>` : ''}
                     
                     <!-- Europa -->
                     ${threatIntensity['GB'] ? `
-                    <ellipse cx="950" cy="640" rx="40" ry="50" fill="${getCountryColor('GB')}" opacity="0.6">
+                    <ellipse cx="950" cy="-70" rx="40" ry="50" fill="${getCountryColor('GB')}" opacity="0.6">
                         <title>GB (United Kingdom): ${threatIntensity['GB']} amenazas</title>
                     </ellipse>` : ''}
                     
                     ${threatIntensity['FR'] ? `
-                    <ellipse cx="980" cy="690" rx="50" ry="55" fill="${getCountryColor('FR')}" opacity="0.6">
+                    <ellipse cx="980" cy="-20" rx="50" ry="55" fill="${getCountryColor('FR')}" opacity="0.6">
                         <title>FR (France): ${threatIntensity['FR']} amenazas</title>
                     </ellipse>` : ''}
                     
                     ${threatIntensity['DE'] ? `
-                    <ellipse cx="1030" cy="650" rx="45" ry="50" fill="${getCountryColor('DE')}" opacity="0.6">
+                    <ellipse cx="1030" cy="-60" rx="45" ry="50" fill="${getCountryColor('DE')}" opacity="0.6">
                         <title>DE (Germany): ${threatIntensity['DE']} amenazas</title>
                     </ellipse>` : ''}
                     
                     ${threatIntensity['ES'] ? `
-                    <ellipse cx="940" cy="730" rx="60" ry="45" fill="${getCountryColor('ES')}" opacity="0.6">
+                    <ellipse cx="940" cy="20" rx="60" ry="45" fill="${getCountryColor('ES')}" opacity="0.6">
                         <title>ES (Spain): ${threatIntensity['ES']} amenazas</title>
                     </ellipse>` : ''}
                     
                     ${threatIntensity['IT'] ? `
-                    <ellipse cx="1040" cy="730" rx="35" ry="70" fill="${getCountryColor('IT')}" opacity="0.6">
+                    <ellipse cx="1040" cy="20" rx="35" ry="70" fill="${getCountryColor('IT')}" opacity="0.6">
                         <title>IT (Italy): ${threatIntensity['IT']} amenazas</title>
                     </ellipse>` : ''}
                     
                     ${threatIntensity['PL'] ? `
-                    <ellipse cx="1090" cy="640" rx="50" ry="45" fill="${getCountryColor('PL')}" opacity="0.6">
+                    <ellipse cx="1090" cy="-70" rx="50" ry="45" fill="${getCountryColor('PL')}" opacity="0.6">
                         <title>PL (Poland): ${threatIntensity['PL']} amenazas</title>
                     </ellipse>` : ''}
                     
                     ${threatIntensity['RU'] ? `
-                    <ellipse cx="1350" cy="610" rx="280" ry="100" fill="${getCountryColor('RU')}" opacity="0.6">
+                    <ellipse cx="1350" cy="-100" rx="280" ry="100" fill="${getCountryColor('RU')}" opacity="0.6">
                         <title>RU (Russia): ${threatIntensity['RU']} amenazas</title>
                     </ellipse>` : ''}
                     
                     ${threatIntensity['TR'] ? `
-                    <ellipse cx="1120" cy="730" rx="60" ry="35" fill="${getCountryColor('TR')}" opacity="0.6">
+                    <ellipse cx="1120" cy="20" rx="60" ry="35" fill="${getCountryColor('TR')}" opacity="0.6">
                         <title>TR (Turkey): ${threatIntensity['TR']} amenazas</title>
                     </ellipse>` : ''}
                     
                     <!-- Asia -->
                     ${threatIntensity['CN'] ? `
-                    <ellipse cx="1450" cy="700" rx="150" ry="120" fill="${getCountryColor('CN')}" opacity="0.6">
+                    <ellipse cx="1450" cy="-10" rx="150" ry="120" fill="${getCountryColor('CN')}" opacity="0.6">
                         <title>CN (China): ${threatIntensity['CN']} amenazas</title>
                     </ellipse>` : ''}
                     
                     ${threatIntensity['IN'] ? `
-                    <ellipse cx="1320" cy="800" rx="90" ry="110" fill="${getCountryColor('IN')}" opacity="0.6">
+                    <ellipse cx="1320" cy="90" rx="90" ry="110" fill="${getCountryColor('IN')}" opacity="0.6">
                         <title>IN (India): ${threatIntensity['IN']} amenazas</title>
                     </ellipse>` : ''}
                     
                     ${threatIntensity['JP'] ? `
-                    <ellipse cx="1680" cy="710" rx="50" ry="90" fill="${getCountryColor('JP')}" opacity="0.6">
+                    <ellipse cx="1680" cy="0" rx="50" ry="90" fill="${getCountryColor('JP')}" opacity="0.6">
                         <title>JP (Japan): ${threatIntensity['JP']} amenazas</title>
                     </ellipse>` : ''}
                     
                     ${threatIntensity['KR'] ? `
-                    <ellipse cx="1620" cy="710" rx="35" ry="50" fill="${getCountryColor('KR')}" opacity="0.6">
+                    <ellipse cx="1620" cy="0" rx="35" ry="50" fill="${getCountryColor('KR')}" opacity="0.6">
                         <title>KR (South Korea): ${threatIntensity['KR']} amenazas</title>
                     </ellipse>` : ''}
                     
                     <!-- Medio Oriente -->
                     ${threatIntensity['SA'] ? `
-                    <ellipse cx="1180" cy="800" rx="80" ry="70" fill="${getCountryColor('SA')}" opacity="0.6">
+                    <ellipse cx="1180" cy="90" rx="80" ry="70" fill="${getCountryColor('SA')}" opacity="0.6">
                         <title>SA (Saudi Arabia): ${threatIntensity['SA']} amenazas</title>
                     </ellipse>` : ''}
                     
                     <!-- Oceanía -->
                     ${threatIntensity['AU'] ? `
-                    <ellipse cx="1650" cy="1150" rx="130" ry="100" fill="${getCountryColor('AU')}" opacity="0.6">
+                    <ellipse cx="1650" cy="440" rx="130" ry="100" fill="${getCountryColor('AU')}" opacity="0.6">
                         <title>AU (Australia): ${threatIntensity['AU']} amenazas</title>
                     </ellipse>` : ''}
                     
                     <!-- África -->
                     ${threatIntensity['ZA'] ? `
-                    <ellipse cx="1060" cy="1180" rx="50" ry="70" fill="${getCountryColor('ZA')}" opacity="0.6">
+                    <ellipse cx="1060" cy="470" rx="50" ry="70" fill="${getCountryColor('ZA')}" opacity="0.6">
                         <title>ZA (South Africa): ${threatIntensity['ZA']} amenazas</title>
                     </ellipse>` : ''}
                     
                     ${threatIntensity['EG'] ? `
-                    <ellipse cx="1100" cy="750" rx="40" ry="50" fill="${getCountryColor('EG')}" opacity="0.6">
+                    <ellipse cx="1100" cy="40" rx="40" ry="50" fill="${getCountryColor('EG')}" opacity="0.6">
                         <title>EG (Egypt): ${threatIntensity['EG']} amenazas</title>
                     </ellipse>` : ''}
                     
                     <!-- Sudeste Asiático -->
                     ${threatIntensity['SG'] ? `
-                    <circle cx="1490" cy="920" r="15" fill="${getCountryColor('SG')}" opacity="0.6">
+                    <circle cx="1490" cy="210" r="15" fill="${getCountryColor('SG')}" opacity="0.6">
                         <title>SG (Singapore): ${threatIntensity['SG']} amenazas</title>
                     </circle>` : ''}
                     
                     ${threatIntensity['VG'] ? `
-                    <circle cx="590" cy="770" r="12" fill="${getCountryColor('VG')}" opacity="0.6">
+                    <circle cx="590" cy="60" r="12" fill="${getCountryColor('VG')}" opacity="0.6">
                         <title>VG (British Virgin Islands): ${threatIntensity['VG']} amenazas</title>
                     </circle>` : ''}
                 </svg>
@@ -1590,10 +1783,301 @@ function showAPIVerificationModal(data) {
     });
 }
 
+// Refresh from environment variables
+const refreshEnvBtn = document.getElementById('refreshEnvBtn');
+if (refreshEnvBtn) {
+    refreshEnvBtn.addEventListener('click', async () => {
+        try {
+            refreshEnvBtn.disabled = true;
+            refreshEnvBtn.innerHTML = `
+                <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                Refrescando...
+            `;
+            
+            const response = await fetch('/api/config/refresh-env', {
+                method: 'POST'
+            });
+            
+            if (!response.ok) throw new Error('Error al refrescar variables de entorno');
+            
+            const data = await response.json();
+            
+            showToast(`✓ Variables de entorno recargadas: ${data.loaded} API(s) encontradas`, 'success');
+            
+            // Reload configuration status to reflect changes
+            setTimeout(() => loadAPIConfig(), 500);
+            
+        } catch (error) {
+            console.error('Error refreshing env:', error);
+            showToast(error.message || 'Error al refrescar variables de entorno', 'error');
+        } finally {
+            refreshEnvBtn.disabled = false;
+            refreshEnvBtn.innerHTML = `
+                <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                Refrescar desde ENV
+            `;
+        }
+    });
+}
+
 // Load from file
 if (loadConfigBtn) {
     loadConfigBtn.addEventListener('click', () => {
         showToast('Función de importación en desarrollo', 'info');
         // TODO: Implement configuration import from file
+    });
+}
+
+// Clear buttons functionality
+const clearDomainBtn = document.getElementById('clearDomainBtn');
+const clearIpBtn = document.getElementById('clearIpBtn');
+const clearHashBtn = document.getElementById('clearHashBtn');
+
+if (clearDomainBtn) {
+    clearDomainBtn.addEventListener('click', () => {
+        const domainInput = document.getElementById('domainInput');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const errorMessage = document.getElementById('errorMessage');
+        
+        if (domainInput) domainInput.value = '';
+        if (resultsContainer) resultsContainer.style.display = 'none';
+        if (errorMessage) errorMessage.style.display = 'none';
+        
+        showToast('Búsqueda de dominio limpiada', 'success');
+    });
+}
+
+if (clearIpBtn) {
+    clearIpBtn.addEventListener('click', () => {
+        const ipInput = document.getElementById('ipInput');
+        const ipResultsContainer = document.getElementById('ipResultsContainer');
+        const ipErrorMessage = document.getElementById('ipErrorMessage');
+        
+        if (ipInput) ipInput.value = '';
+        if (ipResultsContainer) ipResultsContainer.style.display = 'none';
+        if (ipErrorMessage) ipErrorMessage.style.display = 'none';
+        
+        showToast('Búsqueda de IP limpiada', 'success');
+    });
+}
+
+if (clearHashBtn) {
+    clearHashBtn.addEventListener('click', () => {
+        const hashInput = document.getElementById('hashInput');
+        const hashResultsContainer = document.getElementById('hashResultsContainer');
+        const hashErrorMessage = document.getElementById('hashErrorMessage');
+        
+        if (hashInput) hashInput.value = '';
+        if (hashResultsContainer) hashResultsContainer.style.display = 'none';
+        if (hashErrorMessage) hashErrorMessage.style.display = 'none';
+        
+        showToast('Búsqueda de hash limpiada', 'success');
+    });
+}
+
+// Background network animation
+function initBackgroundNetwork() {
+    const canvas = document.getElementById('backgroundNetwork');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    
+    // Set canvas size
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    
+    // Get current theme
+    const isDark = document.body.getAttribute('data-theme') === 'dark';
+    const nodeColor = isDark ? 'rgba(139, 92, 246, 0.8)' : 'rgba(99, 102, 241, 0.6)';
+    const lineColor = isDark ? 'rgba(139, 92, 246, 0.4)' : 'rgba(99, 102, 241, 0.3)';
+    
+    // Network nodes - more nodes for full page coverage
+    const nodes = [];
+    const nodeCount = 25;
+    const maxDistance = 200;
+    
+    // Create nodes
+    for (let i = 0; i < nodeCount; i++) {
+        nodes.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            vx: (Math.random() - 0.5) * 0.3,
+            vy: (Math.random() - 0.5) * 0.3,
+            radius: 2.5
+        });
+    }
+    
+    // Animation loop
+    function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Update and draw nodes
+        nodes.forEach(node => {
+            // Update position
+            node.x += node.vx;
+            node.y += node.vy;
+            
+            // Bounce off edges
+            if (node.x < 0 || node.x > canvas.width) node.vx *= -1;
+            if (node.y < 0 || node.y > canvas.height) node.vy *= -1;
+            
+            // Keep nodes in bounds
+            node.x = Math.max(0, Math.min(canvas.width, node.x));
+            node.y = Math.max(0, Math.min(canvas.height, node.y));
+            
+            // Draw node with glow effect
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+            ctx.fillStyle = nodeColor;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = nodeColor;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            
+            // Draw connections to nearby nodes
+            nodes.forEach(otherNode => {
+                if (node === otherNode) return;
+                
+                const dx = otherNode.x - node.x;
+                const dy = otherNode.y - node.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < maxDistance) {
+                    ctx.beginPath();
+                    ctx.moveTo(node.x, node.y);
+                    ctx.lineTo(otherNode.x, otherNode.y);
+                    const opacity = (1 - distance / maxDistance) * 0.5;
+                    ctx.strokeStyle = lineColor.replace(/[\d.]+\)$/g, opacity + ')');
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+            });
+        });
+        
+        requestAnimationFrame(animate);
+    }
+    
+    animate();
+}
+
+// Initialize background network animation
+if (document.getElementById('backgroundNetwork')) {
+    initBackgroundNetwork();
+}
+
+// Function to analyze resolved IP from domain results
+function analyzeResolvedIP(ipAddress) {
+    // Switch to IP view
+    const ipSidebarItem = document.querySelector('[data-view="ip"]');
+    if (ipSidebarItem) {
+        ipSidebarItem.click();
+        
+        // Wait for view to switch, then fill input and submit
+        setTimeout(() => {
+            const ipInput = document.getElementById('ipInput');
+            if (ipInput) {
+                ipInput.value = ipAddress;
+                
+                // Trigger validation styling
+                if (validateIP(ipAddress)) {
+                    ipInput.classList.add('valid');
+                    ipInput.classList.remove('invalid');
+                }
+                
+                // Auto-submit the form
+                const ipForm = document.getElementById('ipSearchForm');
+                if (ipForm) {
+                    ipForm.requestSubmit();
+                }
+                
+                // Show toast notification
+                showToast(`Analizando IP resuelta: ${ipAddress}`, 'info');
+            }
+        }, 300); // Wait for view transition
+    }
+}
+
+// ===== PROGRESS TERMINAL FUNCTIONS =====
+
+// Sleep utility function
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Initialize progress terminal
+function initProgressTerminal(target) {
+    const terminal = document.getElementById('progressTerminal');
+    const terminalBody = document.getElementById('terminalBody');
+    const terminalTarget = document.getElementById('terminalTarget');
+    
+    if (!terminal || !terminalBody || !terminalTarget) return;
+    
+    // Clear previous content (keep the command line)
+    const commandLine = terminalBody.querySelector('.terminal-line');
+    terminalBody.innerHTML = '';
+    if (commandLine) terminalBody.appendChild(commandLine);
+    
+    // Set target
+    terminalTarget.textContent = target;
+    
+    // Show terminal
+    terminal.style.display = 'block';
+    
+    // Scroll into view smoothly
+    setTimeout(() => {
+        terminal.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
+}
+
+// Add line to terminal
+function addTerminalLine(type, message, withSpinner = false) {
+    const terminalBody = document.getElementById('terminalBody');
+    if (!terminalBody) return;
+    
+    const line = document.createElement('div');
+    line.className = 'terminal-line';
+    
+    const output = document.createElement('span');
+    output.className = `terminal-output ${type}`;
+    output.style.fontFamily = 'Consolas, Monaco, "Courier New", monospace';
+    output.style.whiteSpace = 'pre'; // Preserve whitespace for alignment
+    
+    if (withSpinner) {
+        const spinner = document.createElement('span');
+        spinner.className = 'terminal-spinner';
+        output.appendChild(spinner);
+    }
+    
+    const text = document.createTextNode(message);
+    output.appendChild(text);
+    
+    line.appendChild(output);
+    terminalBody.appendChild(line);
+    
+    // Auto-scroll to bottom with smooth behavior
+    terminalBody.scrollTop = terminalBody.scrollHeight;
+}
+
+// Hide progress terminal
+function hideProgressTerminal() {
+    const terminal = document.getElementById('progressTerminal');
+    if (terminal) {
+        terminal.style.display = 'none';
+    }
+}
+
+// Initialize terminal close button
+const terminalCloseBtn = document.getElementById('terminalCloseBtn');
+if (terminalCloseBtn) {
+    terminalCloseBtn.addEventListener('click', () => {
+        hideProgressTerminal();
     });
 }

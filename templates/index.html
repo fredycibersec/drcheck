@@ -10,10 +10,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/dashboard-styles.css?v=2.1">
+    <link rel="stylesheet" href="/static/dashboard-styles.css?v=3.2">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body data-theme="dark">
+    <!-- Background Network Animation -->
+    <canvas id="backgroundNetwork"></canvas>
+    
     <!-- Toast Notification Container -->
     <div id="toastContainer" class="toast-container"></div>
     
@@ -219,7 +222,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
                 </svg>
             </button>
-            <img src="/static/logo.svg" alt="Logo" class="navbar-logo">
+            <img src="/static/img/logo-navbar.png" alt="Logo" class="navbar-logo">
             <h1 class="navbar-title">Domain Reputation Checker</h1>
         </div>
         
@@ -344,11 +347,11 @@
                                     </svg>
                                     ANALIZAR
                                 </button>
-                                <button type="button" class="btn btn-secondary" id="resetBtn" style="display: none;">
+                                <button type="button" class="btn btn-secondary" id="clearDomainBtn">
                                     <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                                     </svg>
-                                    Reiniciar
+                                    Limpiar
                                 </button>
                             </div>
                         </form>
@@ -360,6 +363,29 @@
                     <div class="spinner"></div>
                     <p>Analizando a través de múltiples fuentes...</p>
                     <p class="loading-subtext">Esto puede tomar un momento</p>
+                </div>
+
+                <!-- Progress CLI Terminal -->
+                <div class="progress-terminal" id="progressTerminal" style="display: none;">
+                    <div class="terminal-header">
+                        <div class="terminal-buttons">
+                            <span class="terminal-button red"></span>
+                            <span class="terminal-button yellow"></span>
+                            <span class="terminal-button green"></span>
+                        </div>
+                        <div class="terminal-title">Analysis Progress</div>
+                        <button class="terminal-close" id="terminalCloseBtn" title="Cerrar terminal">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="terminal-body" id="terminalBody">
+                        <div class="terminal-line">
+                            <span class="terminal-prompt">$</span>
+                            <span class="terminal-command">drcheck --analyze <span id="terminalTarget"></span></span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Error Message -->
@@ -445,6 +471,12 @@
                                     </svg>
                                     ANALIZAR IP
                                 </button>
+                                <button type="button" class="btn btn-secondary" id="clearIpBtn">
+                                    <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                    Limpiar
+                                </button>
                             </div>
                         </form>
                     </div>
@@ -500,6 +532,12 @@
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                                     </svg>
                                     ANALIZAR HASH
+                                </button>
+                                <button type="button" class="btn btn-secondary" id="clearHashBtn">
+                                    <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                    Limpiar
                                 </button>
                             </div>
                         </form>
@@ -818,9 +856,15 @@
                             </svg>
                             Verificar APIs
                         </button>
-                        <button type="button" class="btn btn-secondary" id="loadConfigBtn">
+                        <button type="button" class="btn btn-secondary" id="refreshEnvBtn">
                             <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            </svg>
+                            Refrescar desde ENV
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="loadConfigBtn">
+                            <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                             </svg>
                             Cargar desde Archivo
                         </button>
@@ -866,6 +910,6 @@
         </div>
     </main>
 
-    <script src="/static/dashboard-script.js?v=2.3"></script>
+    <script src="/static/dashboard-script.js?v=2.16"></script>
 </body>
 </html>
