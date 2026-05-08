@@ -1127,10 +1127,12 @@ function renderThreatMap(threats) {
             pointAltitude: d => (d.count / maxCount) * 0.45 + 0.05,
             pointRadius: d => Math.sqrt(d.count / maxCount) * 2.5 + 0.4,
             pointLabel: d => `<div style="background:rgba(15,23,42,0.85);padding:6px 10px;border-radius:6px;font-family:Inter,sans-serif;font-size:13px;color:#f1f5f9;border:1px solid rgba(255,255,255,0.1);"><b>${d.name} (${d.code})</b><br/>${d.count} amenaza${d.count > 1 ? 's' : ''}</div>`,
-            globeImageUrl: 'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-dark.jpg',
-            backgroundImageUrl: 'https://cdn.jsdelivr.net/npm/three-globe/example/img/night-sky.png',
-            atmosphereColor: '#3b82f6',
-            atmosphereAltitude: 0.18,
+            globeImageUrl: 'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg',
+            backgroundImageUrl: '',
+            backgroundColor: 'rgba(10,15,30,1)',
+            atmosphereColor: '#60a5fa',
+            atmosphereAltitude: 0.28,
+            showGraticules: true,
             animateIn: true,
         });
 
