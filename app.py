@@ -1202,18 +1202,23 @@ def check_ip():
     try:
         # Get the checker instance with configured APIs
         checker_instance = get_checker()
-        
+
         if not checker_instance:
             return jsonify({'error': 'Domain reputation checker not available'}), 500
-        
+
+        # Refresh API keys on every request (mirrors domain check behavior)
+        _api_keys = get_api_keys()
+        if _api_keys:
+            checker_instance.api_keys.update(_api_keys)
+
         # Reset results for new check
         checker_instance.results = {}
-        
+
         # Call AbuseIPDB if available
         formatted_results = {}
         overall_score = 0
         scores_count = 0
-        
+
         # AbuseIPDB Check
         if 'abuseipdb' in checker_instance.api_keys:
             try:
