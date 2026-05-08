@@ -10,7 +10,8 @@
 
 **Domain Reputation Checker** es una herramienta profesional de OSINT (Open Source Intelligence) para analizar la reputación de dominios, direcciones IP y hashes de archivos utilizando múltiples fuentes de inteligencia de amenazas. Además de consultar, permite **reportar IPs maliciosas directamente a AbuseIPDB** desde la misma interfaz.
 
-<img width="950" alt="image" src="https://github.com/user-attachments/assets/fd298e50-19ef-445f-a10d-fcb387faf827" />
+<img width="900" alt="Estadisticas" src="https://github.com/user-attachments/assets/810d6361-0808-42ee-882f-c15681793c1f" />
+
 
 
 
