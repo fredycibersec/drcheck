@@ -625,8 +625,11 @@ def check_domain():
         
         # Parse sources if provided, or filter based on input type
         if is_hash:
-            # For hashes, only use sources that support hash lookups
-            hash_sources = ['virustotal', 'malware_bazaar', 'threatfox']
+            # MalwareBazaar and ThreatFox are public; only add VT if key is configured
+            _api_keys = get_api_keys()
+            hash_sources = ['malware_bazaar', 'threatfox']
+            if _api_keys.get('virustotal'):
+                hash_sources.insert(0, 'virustotal')
             if sources and sources != 'all':
                 sources_list = [s.strip() for s in sources.split(',') if s.strip() in hash_sources]
             else:
@@ -743,9 +746,17 @@ def check_domain():
                         
                         formatted_result['details'][field] = value
             
-            # Add investigation URL if present
+            # Add investigation URL — use result's own URL or build one for hash sources
             if 'url' in result:
                 formatted_result['url'] = result['url']
+            elif is_hash:
+                _hash_urls = {
+                    'virustotal':     f'https://www.virustotal.com/gui/file/{domain}',
+                    'malware_bazaar': f'https://bazaar.abuse.ch/sample/{domain}/',
+                    'threatfox':      f'https://threatfox.abuse.ch/ioc/?q={domain}',
+                }
+                if source_id in _hash_urls:
+                    formatted_result['url'] = _hash_urls[source_id]
             
             # Add investigation workflow if present
             if 'investigation_workflow' in result:

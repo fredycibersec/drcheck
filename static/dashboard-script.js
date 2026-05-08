@@ -649,11 +649,16 @@ function displayIPResults(data) {
 function displayHashResults(data) {
     const overallRep = document.getElementById('hashOverallReputation');
     const resultsGrid = document.getElementById('hashResultsGrid');
-    
+
     if (overallRep) {
         const reputation = data.overall_reputation || 'unknown';
+        const hash = data.domain || '';
+        const hashType = hash.length === 32 ? 'MD5' : hash.length === 40 ? 'SHA1' : hash.length === 64 ? 'SHA256' : 'Hash';
         overallRep.innerHTML = `
-            <h3>Hash: <span style="color: var(--text-primary); font-family: monospace; font-size: 0.9rem;">${data.domain}</span></h3>
+            <div style="display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); flex-wrap: wrap;">
+                <span style="background: var(--bg-tertiary); color: var(--text-secondary); font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: var(--radius-full); letter-spacing: 0.05em;">${hashType}</span>
+                <span style="color: var(--text-primary); font-family: monospace; font-size: 0.85rem; word-break: break-all;">${hash}</span>
+            </div>
             <div class="reputation-badge reputation-${reputation}">
                 ${getReputationEmoji(reputation)} ${reputation.toUpperCase()}
             </div>
