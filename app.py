@@ -1219,38 +1219,51 @@ def check_ip():
         overall_score = 0
         scores_count = 0
 
-        # AbuseIPDB Check
-        if 'abuseipdb' in checker_instance.api_keys:
+        # AbuseIPDB Check (direct API call — supports IPv4 and IPv6)
+        if _api_keys.get('abuseipdb'):
             try:
-                abuseipdb_result = checker_instance.check_abuseipdb(ip_address)
-                if abuseipdb_result and abuseipdb_result.get('status') == 'success':
+                import requests as _req
+                abuse_resp = _req.get(
+                    'https://api.abuseipdb.com/api/v2/check',
+                    headers={'Key': _api_keys['abuseipdb'], 'Accept': 'application/json'},
+                    params={'ipAddress': ip_address, 'maxAgeInDays': 90},
+                    timeout=10
+                )
+                if abuse_resp.status_code == 200:
+                    ad = abuse_resp.json().get('data', {})
+                    confidence = ad.get('abuseConfidenceScore', 0)
+                    if confidence >= 75:
+                        abuse_rep = 'malicious'
+                        overall_score -= 3
+                    elif confidence >= 25:
+                        abuse_rep = 'suspicious'
+                        overall_score -= 2
+                    else:
+                        abuse_rep = 'clean'
+                        overall_score += 1
+                    scores_count += 1
                     formatted_results['abuseipdb'] = {
                         'source': 'AbuseIPDB',
                         'status': 'success',
-                        'reputation': abuseipdb_result.get('reputation', 'unknown'),
+                        'reputation': abuse_rep,
                         'details': {
-                            'confidence': abuseipdb_result.get('abuse_confidence', 0),
-                            'reports': abuseipdb_result.get('total_reports', 0),
-                            'last_reported': abuseipdb_result.get('last_reported', 'N/A'),
-                            'country': abuseipdb_result.get('country', 'Unknown'),
-                            'isp': abuseipdb_result.get('isp', 'Unknown')
+                            'confidence': f"{confidence}%",
+                            'reports': ad.get('totalReports', 0),
+                            'last_reported': ad.get('lastReportedAt') or 'N/A',
+                            'country': ad.get('countryCode', 'Unknown'),
+                            'isp': ad.get('isp', 'Unknown'),
+                            'usage_type': ad.get('usageType', 'Unknown'),
                         }
                     }
-                    
-                    # Weight score based on confidence
-                    if abuseipdb_result.get('reputation') == 'malicious':
-                        overall_score -= 3
-                    elif abuseipdb_result.get('reputation') == 'suspicious':
-                        overall_score -= 2
-                    elif abuseipdb_result.get('reputation') == 'clean':
-                        overall_score += 1
-                    scores_count += 1
+                else:
+                    formatted_results['abuseipdb'] = {
+                        'source': 'AbuseIPDB', 'status': 'error',
+                        'message': f'API error {abuse_resp.status_code}'
+                    }
             except Exception as e:
                 app.logger.error(f'AbuseIPDB check failed: {str(e)}')
                 formatted_results['abuseipdb'] = {
-                    'source': 'AbuseIPDB',
-                    'status': 'error',
-                    'message': 'Check failed'
+                    'source': 'AbuseIPDB', 'status': 'error', 'message': 'Check failed'
                 }
         
         # VirusTotal IP Check
