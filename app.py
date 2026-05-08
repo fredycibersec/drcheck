@@ -12,6 +12,7 @@ from flask_compress import Compress
 import sys
 import os
 import re
+import ipaddress
 import logging
 from logging.handlers import RotatingFileHandler
 from io import BytesIO
@@ -1190,16 +1191,14 @@ def check_ip():
         return jsonify({'error': 'IP address is required'}), 400
     
     ip_address = data['ip'].strip()
-    
-    # Basic IP validation
-    if not re.match(r'^(\d{1,3}\.){3}\d{1,3}$', ip_address):
+
+    try:
+        parsed_ip = ipaddress.ip_address(ip_address)
+        ip_version = parsed_ip.version
+        ip_address = str(parsed_ip)  # Normalize (expands/compresses IPv6)
+    except ValueError:
         return jsonify({'error': 'Invalid IP address format'}), 400
-    
-    # Validate IP octets
-    octets = ip_address.split('.')
-    if not all(0 <= int(octet) <= 255 for octet in octets):
-        return jsonify({'error': 'Invalid IP address range'}), 400
-    
+
     try:
         # Get the checker instance with configured APIs
         checker_instance = get_checker()
@@ -1353,9 +1352,14 @@ def check_ip():
         ]
         
         def check_blacklist(bl_domain):
-            reversed_ip = '.'.join(reversed(ip_address.split('.')))
-            query = f"{reversed_ip}.{bl_domain}"
             try:
+                addr = ipaddress.ip_address(ip_address)
+                if addr.version == 6:
+                    nibbles = addr.exploded.replace(':', '')
+                    reversed_addr = '.'.join(reversed(nibbles))
+                else:
+                    reversed_addr = '.'.join(reversed(ip_address.split('.')))
+                query = f"{reversed_addr}.{bl_domain}"
                 socket.gethostbyname(query)
                 return True
             except:
@@ -1759,13 +1763,11 @@ def report_ip():
     categories = data.get('categories', [])
     comment = data.get('comment', '').strip()
 
-    # Validate IP
-    if not re.match(r'^(\d{1,3}\.){3}\d{1,3}$', ip_address):
+    # Validate IP (IPv4 and IPv6)
+    try:
+        ip_address = str(ipaddress.ip_address(ip_address))
+    except ValueError:
         return jsonify({'error': 'Invalid IP address format'}), 400
-
-    octets = ip_address.split('.')
-    if not all(0 <= int(octet) <= 255 for octet in octets):
-        return jsonify({'error': 'Invalid IP address range'}), 400
 
     # Validate categories
     if not categories:

@@ -81,10 +81,13 @@ function validateDomain(domain) {
 }
 
 function validateIP(ip) {
-    const pattern = /^(\d{1,3}\.){3}\d{1,3}$/;
-    if (!pattern.test(ip)) return false;
-    const parts = ip.split('.');
-    return parts.every(part => parseInt(part) >= 0 && parseInt(part) <= 255);
+    const ipv4 = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (ipv4.test(ip)) {
+        return ip.split('.').every(p => parseInt(p) >= 0 && parseInt(p) <= 255);
+    }
+    // IPv6: full, compressed, or mixed notation
+    const ipv6 = /^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4})?:)?((25[0-5]|(2[0-4]|1?[0-9])?[0-9])\.){3}(25[0-5]|(2[0-4]|1?[0-9])?[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1?[0-9])?[0-9])\.){3}(25[0-5]|(2[0-4]|1?[0-9])?[0-9]))$/;
+    return ipv6.test(ip);
 }
 
 function validateHash(hash) {
