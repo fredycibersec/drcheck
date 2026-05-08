@@ -8,7 +8,7 @@
   <img width="500" alt="image" src="https://github.com/user-attachments/assets/ce5527fc-398a-44a9-98f1-558ae0772c0c" />
 </p>
 
-**Domain Reputation Checker** es una herramienta profesional de OSINT (Open Source Intelligence) para analizar la reputación de dominios, direcciones IP y hashes de archivos utilizando múltiples fuentes de inteligencia de amenazas.
+**Domain Reputation Checker** es una herramienta profesional de OSINT (Open Source Intelligence) para analizar la reputación de dominios, direcciones IP y hashes de archivos utilizando múltiples fuentes de inteligencia de amenazas. Además de consultar, permite **reportar IPs maliciosas directamente a AbuseIPDB** desde la misma interfaz.
 
 <img width="950" alt="image" src="https://github.com/user-attachments/assets/fd298e50-19ef-445f-a10d-fcb387faf827" />
 
@@ -24,12 +24,19 @@
 - ✅ Integración con VirusTotal, URLVoid, AlienVault OTX, y más
 
 ### 🌍 Análisis de IPs
-- ✅ Verificación contra 20+ listas negras en tiempo real
-- ✅ Análisis de reputación de ASN (Autonomous System Number)
-- ✅ Inteligencia de amenazas por país y región
-- ✅ Geolocalización y detección de hosting provider
-- ✅ Detección de proxies, VPN y servicios de anonimización
+- ✅ Verificación contra 30+ listas negras DNS en tiempo real
+- ✅ Análisis de reputación con AbuseIPDB y VirusTotal
+- ✅ Geolocalización y detección de ISP / ASN
+- ✅ Detección de proxies, VPN y nodos Tor
 - ✅ Clasificación automática: Maliciosa, Sospechosa o Limpia
+- ✅ **Reporte directo a AbuseIPDB** con selección de categorías y comentario
+
+### 🚨 Reporte de IPs Maliciosas
+- ✅ Botón **"Reportar a AbuseIPDB"** integrado en los resultados de IP
+- ✅ Selección de las **23 categorías oficiales** de AbuseIPDB (SSH, DDoS, Port Scan, etc.)
+- ✅ Campo de comentario libre (hasta 1.024 caracteres)
+- ✅ Confirmación inmediata con el nuevo *abuse confidence score*
+- ✅ Validación completa en backend antes de enviar
 
 ### 🔐 Análisis de Hashes
 - ✅ Búsqueda en MalwareBazaar (base de datos de malware)
@@ -104,7 +111,7 @@ Abre tu navegador en `http://localhost:5000` 🎉
 - **Variable:** `VIRUSTOTAL_API_KEY`
 
 #### **AbuseIPDB** (⭐ Muy recomendada)
-- **Qué hace:** Reportes validados de IPs maliciosas
+- **Qué hace:** Consulta y **reporta** IPs maliciosas con la comunidad
 - **Obtener:** [https://www.abuseipdb.com/account/api](https://www.abuseipdb.com/account/api)
 - **Precio:** Gratis (1000 consultas/día)
 - **Variable:** `ABUSEIPDB_API_KEY`
@@ -131,6 +138,7 @@ Abre tu navegador en `http://localhost:5000` 🎉
 
 - **IP-API:** [https://ipapi.com/](https://ipapi.com/) - `IPAPI_ACCESS_KEY` (versión gratuita disponible)
 - **IPData:** [https://ipdata.co/](https://ipdata.co/) - `IPDATA_API_KEY`
+- **NetworksDB:** [https://networksdb.io/](https://networksdb.io/) - `NETWORKSDB_API_KEY`
 
 > 📝 **Nota:** Con solo VirusTotal y AbuseIPDB ya tienes un análisis muy robusto. Las demás APIs mejoran la precisión y reducen falsos positivos.
 
@@ -183,6 +191,17 @@ El servicio carga las API keys de forma segura desde un archivo de entorno con p
    - Listas negras detectadas
    - Puertos abiertos (si disponible)
 
+### Reportar una IP a AbuseIPDB
+1. Analizar la IP sospechosa
+2. En el resultado, hacer click en **"Reportar a AbuseIPDB"** (botón rojo)
+3. Seleccionar las **categorías de abuso** que apliquen:
+   - SSH, Brute-Force, Port Scan, DDoS Attack, Web App Attack…
+4. Añadir un **comentario** opcional con detalles (logs, puertos, fechas)
+5. Click en **"Enviar reporte"**
+6. La herramienta confirma el reporte y muestra el nuevo *confidence score*
+
+> ⚠️ Requiere API key de AbuseIPDB configurada. Los reportes contribuyen a la base de datos comunitaria.
+
 ### Análisis de Hashes
 1. Ir a la sección **"Analizar Hash"**
 2. Ingresar el hash (MD5, SHA1 o SHA256)
@@ -207,7 +226,7 @@ El sistema utiliza un **scoring ponderado por tiers** que prioriza fuentes más 
 | 🏆 Tier 1 | 3.0 | VirusTotal, AbuseIPDB, AlienVault OTX | 90-95% |
 | ⭐ Tier 2 | 2.0 | URLScan, ThreatFox, MalwareBazaar | 88-98% |
 | ⚡ Tier 3 | 1.5 | Shodan, URLVoid, SecurityTrails | 70-75% |
-| 🔧 Tier 4 | 1.0 | WHOIS, Geolocation, Otros | 60-65% |
+| 🔧 Tier 4 | 1.0 | WHOIS, Geolocation, NetworksDB | 60-65% |
 
 **Fórmula:** `Score = Σ(Reputación × Peso) / ΣPesos`
 
@@ -240,7 +259,7 @@ La aplicación soporta **tema oscuro y claro** con cambio automático:
 ## 📁 Estructura del Proyecto
 
 ```
-Domain-Reputation-WebApp/
+drcheck/
 ├── app.py                      # Aplicación Flask principal
 ├── api_manager.py              # Gestión de API keys cifradas
 ├── wsgi.py                     # Entry point para WSGI
@@ -271,13 +290,40 @@ Domain-Reputation-WebApp/
 ✅ No se almacenan secretos en Git (.gitignore configurado)  
 ✅ Sin consultas DNS directas (modo stealth)  
 ✅ Sanitización de inputs  
-✅ Rate limiting en consultas API  
+✅ Rate limiting en consultas y reportes API  
+✅ Validación estricta de categorías antes de enviar reportes  
 
 ### Recomendaciones
 - **NUNCA** compartas tu archivo `.env` o `flask-app.env`
 - Usa `chmod 600` en archivos de configuración
 - Regenera API keys si las expones accidentalmente
 - Mantén las dependencias actualizadas: `pip install -U -r requirements.txt`
+
+## 🌐 API Endpoints
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| `POST` | `/api/check` | Analizar dominio o hash |
+| `POST` | `/api/check-ip` | Analizar dirección IP |
+| `POST` | `/api/report-ip` | Reportar IP a AbuseIPDB |
+| `GET` | `/api/statistics` | Estadísticas de uso |
+| `GET` | `/api/sources` | Fuentes disponibles |
+| `POST` | `/api/export-pdf` | Exportar informe PDF |
+| `POST` | `/api/export-json` | Exportar resultados JSON |
+| `POST` | `/api/export-csv` | Exportar resultados CSV |
+
+### Ejemplo: Reportar una IP
+```bash
+curl -X POST http://localhost:5000/api/report-ip \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ip": "192.168.1.1",
+    "categories": [18, 22],
+    "comment": "SSH brute-force detectado el 2026-05-08 desde este origen"
+  }'
+```
+
+**Categorías disponibles:** 1 DNS Compromise · 4 DDoS · 14 Port Scan · 15 Hacking · 16 SQL Injection · 18 Brute-Force · 21 Web App Attack · 22 SSH · [y 15 más](https://www.abuseipdb.com/categories)
 
 ## 🤝 Contribuir
 
@@ -304,20 +350,21 @@ Herramienta desarrollada para investigaciones OSINT y análisis de seguridad.
 
 - VirusTotal por su API pública
 - Abuse.ch por MalwareBazaar y ThreatFox
-- AbuseIPDB por la detección de IPs maliciosas
+- AbuseIPDB por la detección y reporte de IPs maliciosas
+- NetworksDB.io por la información de redes y organizaciones
 - La comunidad OSINT por las mejores prácticas
 - Chart.js por las visualizaciones
 
 ## 📚 Recursos Adicionales
 
 - [Documentación del Sistema de Scoring](docs/SOURCE_RELIABILITY_RANKING.md)
-- [Guía de Integración de APIs](docs/API_INTEGRATION.md)
 - [VirusTotal API Docs](https://developers.virustotal.com/reference/overview)
 - [AbuseIPDB API Docs](https://docs.abuseipdb.com/)
+- [AbuseIPDB Categorías](https://www.abuseipdb.com/categories)
 
 ## ⚠️ Disclaimer
 
-Esta herramienta está diseñada para investigaciones OSINT legítimas y análisis de seguridad. El autor no se hace responsable del uso indebido o ilegal de esta herramienta. Úsala de manera ética y respetando las leyes aplicables.
+Esta herramienta está diseñada para investigaciones OSINT legítimas y análisis de seguridad. El autor no se hace responsable del uso indebido o ilegal de esta herramienta. Úsala de manera ética y respetando las leyes aplicables. Los reportes enviados a AbuseIPDB deben corresponder a actividad maliciosa real y verificada.
 
 ---
 
