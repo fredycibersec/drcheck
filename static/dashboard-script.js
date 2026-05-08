@@ -1101,7 +1101,7 @@ function renderThreatMap(threats) {
 
     if (globeReactRoot) { try { globeReactRoot.unmount(); } catch(e) {} globeReactRoot = null; }
 
-    container.innerHTML = `<div id="globeMount" style="width:100%;height:620px;"></div>` + barsHTML;
+    container.innerHTML = `<div id="globeMount" style="width:100%;height:820px;"></div>` + barsHTML;
 
     const GlobeComponent = window.Globe;
 
@@ -1119,7 +1119,7 @@ function renderThreatMap(threats) {
 
         const globeEl = React.createElement(GlobeComponent, {
             width,
-            height: 620,
+            height: 820,
             pointsData,
             pointLat: 'lat',
             pointLng: 'lng',
