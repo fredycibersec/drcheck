@@ -76,7 +76,7 @@ def set_security_headers(response):
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['X-XSS-Protection'] = '1; mode=block'
     response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' http://ip-api.com https://cdn.jsdelivr.net; frame-ancestors 'none'"
+    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com; connect-src 'self' http://ip-api.com https://cdn.jsdelivr.net; worker-src blob:; frame-ancestors 'none'"
     return response
 
 def get_checker():
@@ -158,7 +158,7 @@ def save_stats(stats):
         with open(STATS_FILE, 'w') as f:
             json.dump(stats, f, indent=2)
     except Exception as e:
-        print(f"Error saving stats: {e}")
+        app.logger.error(f"Error saving stats: {e}")
 
 def get_country_from_ip(ip_address):
     """Get country from IP address using ip-api.com (free, no key required)"""
@@ -1091,8 +1091,7 @@ def export_json():
         return jsonify({'error': 'Invalid data provided'}), 400
     
     try:
-        import json as json_module
-        json_str = json_module.dumps(data, indent=2, ensure_ascii=False)
+        json_str = json.dumps(data, indent=2, ensure_ascii=False)
         
         response = app.response_class(
             response=json_str,
@@ -1480,12 +1479,12 @@ def get_statistics():
         # Calculate threat map data (group by country)
         threat_map = {}
         for search in stats['searches']:
-            if search.get('country') and search.get('reputation') in ['malicious', 'suspicious']:
+            if search.get('country') and search.get('reputation') in ['malicious', 'suspicious', 'questionable']:
                 country = search['country']
                 threat_map[country] = threat_map.get(country, 0) + 1
-        
+
         # Top threats
-        top_threats = sorted(threat_map.items(), key=lambda x: x[1], reverse=True)[:10]
+        top_threats = sorted(threat_map.items(), key=lambda x: x[1], reverse=True)[:20]
         
         # Reputation distribution
         reputation_dist = {
@@ -1732,6 +1731,97 @@ def verify_api_keys():
     except Exception as e:
         app.logger.error(f'Error verifying API keys: {str(e)}')
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/report-ip', methods=['POST'])
+@limiter.limit("5 per minute")
+def report_ip():
+    """Report an IP address to AbuseIPDB"""
+    import requests as req
+
+    data = request.get_json()
+
+    if not data or 'ip' not in data:
+        return jsonify({'error': 'IP address is required'}), 400
+
+    ip_address = data['ip'].strip()
+    categories = data.get('categories', [])
+    comment = data.get('comment', '').strip()
+
+    # Validate IP
+    if not re.match(r'^(\d{1,3}\.){3}\d{1,3}$', ip_address):
+        return jsonify({'error': 'Invalid IP address format'}), 400
+
+    octets = ip_address.split('.')
+    if not all(0 <= int(octet) <= 255 for octet in octets):
+        return jsonify({'error': 'Invalid IP address range'}), 400
+
+    # Validate categories
+    if not categories:
+        return jsonify({'error': 'At least one category is required'}), 400
+
+    valid_category_ids = set(range(1, 24))
+    sanitized_categories = []
+    for cat in categories:
+        try:
+            cat_int = int(cat)
+        except (ValueError, TypeError):
+            return jsonify({'error': f'Invalid category value: {cat}'}), 400
+        if cat_int not in valid_category_ids:
+            return jsonify({'error': f'Invalid category ID: {cat_int}'}), 400
+        sanitized_categories.append(cat_int)
+
+    # Validate comment length
+    if len(comment) > 1024:
+        return jsonify({'error': 'Comment exceeds maximum length of 1024 characters'}), 400
+
+    # Get AbuseIPDB API key
+    api_keys = get_api_keys()
+    abuseipdb_key = api_keys.get('abuseipdb')
+
+    if not abuseipdb_key:
+        return jsonify({'error': 'AbuseIPDB API key not configured. Configure it in the API settings.'}), 400
+
+    try:
+        url = 'https://api.abuseipdb.com/api/v2/report'
+        headers = {
+            'Accept': 'application/json',
+            'Key': abuseipdb_key
+        }
+        payload = {
+            'ip': ip_address,
+            'categories': ','.join(map(str, sanitized_categories)),
+            'comment': comment
+        }
+
+        response = req.post(url, headers=headers, data=payload, timeout=10)
+
+        if response.status_code == 200:
+            result = response.json()
+            report_data = result.get('data', {})
+            app.logger.info(
+                f'IP reported to AbuseIPDB: {ip_address} '
+                f'(confidence: {report_data.get("abuseConfidenceScore")}%)'
+            )
+            return jsonify({
+                'success': True,
+                'ip': report_data.get('ipAddress', ip_address),
+                'abuse_confidence': report_data.get('abuseConfidenceScore', 0),
+                'message': f'IP {ip_address} reportada exitosamente a AbuseIPDB'
+            })
+        elif response.status_code == 422:
+            error_data = response.json()
+            errors = error_data.get('errors', [])
+            error_msg = errors[0].get('detail', 'Validation error') if errors else 'Validation error'
+            return jsonify({'error': error_msg}), 422
+        elif response.status_code == 429:
+            return jsonify({'error': 'Rate limit excedido. Demasiados reportes en poco tiempo.'}), 429
+        else:
+            return jsonify({'error': f'AbuseIPDB API error: {response.status_code}'}), response.status_code
+
+    except Exception as e:
+        app.logger.error(f'AbuseIPDB report failed for {ip_address}: {str(e)}')
+        return jsonify({'error': f'Report failed: {str(e)}'}), 500
+
 
 if __name__ == '__main__':
     print("🛡️  Domain Reputation Checker - Web Application")

@@ -615,16 +615,27 @@ function displayResults(type, data) {
 function displayIPResults(data) {
     const overallRep = document.getElementById('ipOverallReputation');
     const resultsGrid = document.getElementById('ipResultsGrid');
-    
+    const ipAddress = data.ip || data.target;
+
     if (overallRep) {
         overallRep.innerHTML = `
-            <h3>IP: <span style="color: var(--text-primary);">${data.ip || data.target}</span></h3>
+            <h3>IP: <span style="color: var(--text-primary);">${ipAddress}</span></h3>
             <div class="reputation-badge reputation-${data.reputation || 'unknown'}">
                 ${getReputationEmoji(data.reputation)} ${(data.reputation || 'UNKNOWN').toUpperCase()}
             </div>
+            <button onclick="openReportModal('${ipAddress}')"
+                    class="btn"
+                    style="margin-top: var(--space-4); background: #ef4444; border-color: #ef4444; display: inline-flex; align-items: center; gap: var(--space-2); font-size: 0.85rem;">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
+                    </path>
+                </svg>
+                Reportar a AbuseIPDB
+            </button>
         `;
     }
-    
+
     if (resultsGrid && data.results) {
         resultsGrid.innerHTML = '';
         // data.results is an array, iterate directly
@@ -848,6 +859,7 @@ function createSourceCard(result) {
 
 // Statistics functionality
 let reputationChart, searchTypesChart;
+let globeReactRoot = null;
 
 // Update chart theme colors
 function updateChartTheme(chart) {
@@ -871,25 +883,20 @@ function updateChartTheme(chart) {
 
 async function loadStatistics() {
     try {
-        console.log('[Stats] Loading statistics...');
         const response = await fetch('/api/statistics');
         const data = await response.json();
-        console.log('[Stats] Data received:', data);
-        
+
         // Update summary cards
         document.getElementById('totalSearches').textContent = data.summary.total || 0;
         document.getElementById('maliciousCount').textContent = data.reputation_distribution.malicious || 0;
         document.getElementById('suspiciousCount').textContent = data.reputation_distribution.suspicious || 0;
         document.getElementById('cleanCount').textContent = data.reputation_distribution.clean || 0;
-        console.log('[Stats] Summary cards updated');
-        
+
         // Render charts
-        console.log('[Stats] Rendering charts...');
         renderReputationChart(data.reputation_distribution);
         renderSearchTypesChart(data.summary);
         renderThreatMap(data.threat_map);
         renderRecentSearches(data.recent_searches);
-        console.log('[Stats] All charts rendered');
         
     } catch (error) {
         console.error('[Stats] Error loading statistics:', error);
@@ -898,18 +905,11 @@ async function loadStatistics() {
 
 function renderReputationChart(distribution) {
     const ctx = document.getElementById('reputationChart');
-    console.log('[Chart] Reputation chart canvas:', ctx);
-    if (!ctx) {
-        console.error('[Chart] Reputation chart canvas not found!');
-        return;
-    }
-    
+    if (!ctx) return;
+
     if (reputationChart) {
-        console.log('[Chart] Destroying existing reputation chart');
         reputationChart.destroy();
     }
-    
-    console.log('[Chart] Creating reputation chart with data:', distribution);
     reputationChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -939,18 +939,11 @@ function renderReputationChart(distribution) {
 
 function renderSearchTypesChart(summary) {
     const ctx = document.getElementById('searchTypesChart');
-    console.log('[Chart] Search types chart canvas:', ctx);
-    if (!ctx) {
-        console.error('[Chart] Search types chart canvas not found!');
-        return;
-    }
-    
+    if (!ctx) return;
+
     if (searchTypesChart) {
-        console.log('[Chart] Destroying existing search types chart');
         searchTypesChart.destroy();
     }
-    
-    console.log('[Chart] Creating search types chart with data:', summary);
     searchTypesChart = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -988,9 +981,9 @@ function renderSearchTypesChart(summary) {
 function renderThreatMap(threats) {
     const container = document.getElementById('threatMapContent');
     if (!container) return;
-    
+
     if (!threats || threats.length === 0) {
-        // Show empty state with informative message
+        if (globeReactRoot) { globeReactRoot.unmount(); globeReactRoot = null; }
         container.innerHTML = `
             <div style="text-align: center; padding: var(--space-8);">
                 <div style="font-size: 3rem; margin-bottom: var(--space-4); opacity: 0.3;">🌍</div>
@@ -1008,10 +1001,9 @@ function renderThreatMap(threats) {
         `;
         return;
     }
-    
+
     const maxCount = Math.max(...threats.map(t => t[1]));
-    
-    // Mapeo de códigos de país ISO a nombres completos
+
     const countryNames = {
         'US': 'United States', 'CN': 'China', 'RU': 'Russia', 'DE': 'Germany', 'GB': 'United Kingdom',
         'FR': 'France', 'JP': 'Japan', 'IN': 'India', 'BR': 'Brazil', 'CA': 'Canada',
@@ -1019,217 +1011,132 @@ function renderThreatMap(threats) {
         'NL': 'Netherlands', 'SE': 'Sweden', 'PL': 'Poland', 'TR': 'Turkey', 'AR': 'Argentina',
         'SA': 'Saudi Arabia', 'ZA': 'South Africa', 'EG': 'Egypt', 'SG': 'Singapore',
         'VG': 'British Virgin Islands', 'NZ': 'New Zealand', 'CH': 'Switzerland', 'NO': 'Norway',
-        'DK': 'Denmark', 'FI': 'Finland', 'BE': 'Belgium', 'AT': 'Austria', 'PT': 'Portugal'
+        'DK': 'Denmark', 'FI': 'Finland', 'BE': 'Belgium', 'AT': 'Austria', 'PT': 'Portugal',
+        'UA': 'Ukraine', 'IR': 'Iran', 'PK': 'Pakistan', 'VN': 'Vietnam', 'ID': 'Indonesia',
+        'TH': 'Thailand', 'NG': 'Nigeria', 'HK': 'Hong Kong', 'TW': 'Taiwan', 'CZ': 'Czech Republic',
+        'RO': 'Romania', 'HU': 'Hungary', 'PH': 'Philippines', 'MY': 'Malaysia', 'CO': 'Colombia',
+        'CL': 'Chile', 'IL': 'Israel', 'AE': 'United Arab Emirates'
     };
-    
+
     const countryMapping = {
         'US': 'US', 'CN': 'CN', 'RU': 'RU', 'DE': 'DE', 'GB': 'GB',
         'FR': 'FR', 'JP': 'JP', 'IN': 'IN', 'BR': 'BR', 'CA': 'CA',
         'United States': 'US', 'China': 'CN', 'Russia': 'RU', 'Germany': 'DE', 'United Kingdom': 'GB',
         'France': 'FR', 'Japan': 'JP', 'India': 'IN', 'Brazil': 'BR', 'Canada': 'CA'
     };
-    
-    // Crear un mapa de intensidad para colorear países
-    const threatIntensity = {};
-    threats.forEach(([country, count]) => {
-        const countryCode = countryMapping[country] || country;
-        threatIntensity[countryCode] = count;
-    });
-    
-    // Calcular colores según intensidad
-    const getCountryColor = (countryCode) => {
-        const count = threatIntensity[countryCode];
-        if (!count) return 'var(--bg-tertiary)';
-        const intensity = count / maxCount;
-        if (intensity > 0.7) return '#ef4444'; // Rojo alto
-        if (intensity > 0.4) return '#f59e0b'; // Naranja medio
-        if (intensity > 0.2) return '#fbbf24'; // Amarillo bajo
-        return '#10b981'; // Verde mínimo
+
+    const countryCoords = {
+        'US': { lat: 37.09, lng: -95.71 }, 'CN': { lat: 35.86, lng: 104.19 },
+        'RU': { lat: 61.52, lng: 105.31 }, 'DE': { lat: 51.16, lng: 10.45 },
+        'GB': { lat: 55.37, lng: -3.43 },  'FR': { lat: 46.23, lng: 2.21 },
+        'JP': { lat: 36.20, lng: 138.25 }, 'IN': { lat: 20.59, lng: 78.96 },
+        'BR': { lat: -14.23, lng: -51.92 },'CA': { lat: 56.13, lng: -106.34 },
+        'AU': { lat: -25.27, lng: 133.77 },'MX': { lat: 23.63, lng: -102.55 },
+        'IT': { lat: 41.87, lng: 12.56 },  'ES': { lat: 40.46, lng: -3.74 },
+        'KR': { lat: 35.90, lng: 127.76 }, 'NL': { lat: 52.13, lng: 5.29 },
+        'SE': { lat: 60.12, lng: 18.64 },  'PL': { lat: 51.91, lng: 19.14 },
+        'TR': { lat: 38.96, lng: 35.24 },  'AR': { lat: -38.41, lng: -63.61 },
+        'SA': { lat: 23.88, lng: 45.07 },  'ZA': { lat: -30.55, lng: 22.93 },
+        'EG': { lat: 26.82, lng: 30.80 },  'SG': { lat: 1.35, lng: 103.82 },
+        'VG': { lat: 18.43, lng: -64.62 }, 'NZ': { lat: -40.90, lng: 174.88 },
+        'CH': { lat: 46.81, lng: 8.22 },   'NO': { lat: 60.47, lng: 8.46 },
+        'DK': { lat: 56.26, lng: 9.50 },   'FI': { lat: 61.92, lng: 25.74 },
+        'BE': { lat: 50.50, lng: 4.46 },   'AT': { lat: 47.51, lng: 14.55 },
+        'PT': { lat: 39.39, lng: -8.22 },  'UA': { lat: 48.37, lng: 31.16 },
+        'IR': { lat: 32.42, lng: 53.68 },  'PK': { lat: 30.37, lng: 69.34 },
+        'VN': { lat: 14.05, lng: 108.27 }, 'ID': { lat: -0.78, lng: 113.92 },
+        'TH': { lat: 15.87, lng: 100.99 }, 'NG': { lat: 9.08, lng: 8.67 },
+        'HK': { lat: 22.39, lng: 114.10 }, 'TW': { lat: 23.69, lng: 120.96 },
+        'CZ': { lat: 49.81, lng: 15.47 },  'RO': { lat: 45.94, lng: 24.96 },
+        'HU': { lat: 47.16, lng: 19.50 },  'PH': { lat: 12.87, lng: 121.77 },
+        'MY': { lat: 4.21, lng: 101.97 },  'CO': { lat: 4.57, lng: -74.29 },
+        'CL': { lat: -35.67, lng: -71.54 },'IL': { lat: 31.04, lng: 34.85 },
+        'AE': { lat: 23.42, lng: 53.84 }
     };
-    
-    // Usar el archivo SVG existente del mapa mundial
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const bgColor = isDark ? '#1e293b' : '#cbd5e1';
-    
-    // Crear el contenedor del mapa simplificado
-    const worldMapSVG = `
-        <div style="background: ${bgColor}; border-radius: var(--radius-lg); padding: var(--space-3); margin-bottom: var(--space-4); position: relative;">
-            <!-- Mapa mundial de fondo -->
-            <div style="position: relative; max-height: 350px; overflow: hidden;">
-                <!-- Imagen de fondo -->
-                <img src="static/img/world-map.svg" style="width: 100%; max-height: 350px; object-fit: contain; display: block; opacity: ${isDark ? '0.5' : '0.7'}; filter: ${isDark ? 'brightness(0.8) contrast(1.1)' : 'brightness(1)'};"/>
-                
-                <!-- SVG Overlay para colorear países según amenazas -->
-                <svg viewBox="150 -300 1800 900" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;" preserveAspectRatio="xMidYMid meet">
-                    <!-- Países con amenazas coloreados -->
-                    
-                    <!-- América del Norte -->
-                    ${threatIntensity['US'] ? `
-                    <ellipse cx="450" cy="-60" rx="180" ry="120" fill="${getCountryColor('US')}" opacity="0.6">
-                        <title>US (United States): ${threatIntensity['US']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    ${threatIntensity['CA'] ? `
-                    <ellipse cx="450" cy="-160" rx="200" ry="80" fill="${getCountryColor('CA')}" opacity="0.6">
-                        <title>CA (Canada): ${threatIntensity['CA']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    ${threatIntensity['MX'] ? `
-                    <ellipse cx="450" cy="70" rx="80" ry="60" fill="${getCountryColor('MX')}" opacity="0.6">
-                        <title>MX (Mexico): ${threatIntensity['MX']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    <!-- América del Sur -->
-                    ${threatIntensity['BR'] ? `
-                    <ellipse cx="650" cy="340" rx="120" ry="140" fill="${getCountryColor('BR')}" opacity="0.6">
-                        <title>BR (Brazil): ${threatIntensity['BR']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    ${threatIntensity['AR'] ? `
-                    <ellipse cx="600" cy="490" rx="70" ry="100" fill="${getCountryColor('AR')}" opacity="0.6">
-                        <title>AR (Argentina): ${threatIntensity['AR']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    <!-- Europa -->
-                    ${threatIntensity['GB'] ? `
-                    <ellipse cx="950" cy="-70" rx="40" ry="50" fill="${getCountryColor('GB')}" opacity="0.6">
-                        <title>GB (United Kingdom): ${threatIntensity['GB']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    ${threatIntensity['FR'] ? `
-                    <ellipse cx="980" cy="-20" rx="50" ry="55" fill="${getCountryColor('FR')}" opacity="0.6">
-                        <title>FR (France): ${threatIntensity['FR']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    ${threatIntensity['DE'] ? `
-                    <ellipse cx="1030" cy="-60" rx="45" ry="50" fill="${getCountryColor('DE')}" opacity="0.6">
-                        <title>DE (Germany): ${threatIntensity['DE']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    ${threatIntensity['ES'] ? `
-                    <ellipse cx="940" cy="20" rx="60" ry="45" fill="${getCountryColor('ES')}" opacity="0.6">
-                        <title>ES (Spain): ${threatIntensity['ES']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    ${threatIntensity['IT'] ? `
-                    <ellipse cx="1040" cy="20" rx="35" ry="70" fill="${getCountryColor('IT')}" opacity="0.6">
-                        <title>IT (Italy): ${threatIntensity['IT']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    ${threatIntensity['PL'] ? `
-                    <ellipse cx="1090" cy="-70" rx="50" ry="45" fill="${getCountryColor('PL')}" opacity="0.6">
-                        <title>PL (Poland): ${threatIntensity['PL']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    ${threatIntensity['RU'] ? `
-                    <ellipse cx="1350" cy="-100" rx="280" ry="100" fill="${getCountryColor('RU')}" opacity="0.6">
-                        <title>RU (Russia): ${threatIntensity['RU']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    ${threatIntensity['TR'] ? `
-                    <ellipse cx="1120" cy="20" rx="60" ry="35" fill="${getCountryColor('TR')}" opacity="0.6">
-                        <title>TR (Turkey): ${threatIntensity['TR']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    <!-- Asia -->
-                    ${threatIntensity['CN'] ? `
-                    <ellipse cx="1450" cy="-10" rx="150" ry="120" fill="${getCountryColor('CN')}" opacity="0.6">
-                        <title>CN (China): ${threatIntensity['CN']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    ${threatIntensity['IN'] ? `
-                    <ellipse cx="1320" cy="90" rx="90" ry="110" fill="${getCountryColor('IN')}" opacity="0.6">
-                        <title>IN (India): ${threatIntensity['IN']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    ${threatIntensity['JP'] ? `
-                    <ellipse cx="1680" cy="0" rx="50" ry="90" fill="${getCountryColor('JP')}" opacity="0.6">
-                        <title>JP (Japan): ${threatIntensity['JP']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    ${threatIntensity['KR'] ? `
-                    <ellipse cx="1620" cy="0" rx="35" ry="50" fill="${getCountryColor('KR')}" opacity="0.6">
-                        <title>KR (South Korea): ${threatIntensity['KR']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    <!-- Medio Oriente -->
-                    ${threatIntensity['SA'] ? `
-                    <ellipse cx="1180" cy="90" rx="80" ry="70" fill="${getCountryColor('SA')}" opacity="0.6">
-                        <title>SA (Saudi Arabia): ${threatIntensity['SA']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    <!-- Oceanía -->
-                    ${threatIntensity['AU'] ? `
-                    <ellipse cx="1650" cy="440" rx="130" ry="100" fill="${getCountryColor('AU')}" opacity="0.6">
-                        <title>AU (Australia): ${threatIntensity['AU']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    <!-- África -->
-                    ${threatIntensity['ZA'] ? `
-                    <ellipse cx="1060" cy="470" rx="50" ry="70" fill="${getCountryColor('ZA')}" opacity="0.6">
-                        <title>ZA (South Africa): ${threatIntensity['ZA']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    ${threatIntensity['EG'] ? `
-                    <ellipse cx="1100" cy="40" rx="40" ry="50" fill="${getCountryColor('EG')}" opacity="0.6">
-                        <title>EG (Egypt): ${threatIntensity['EG']} amenazas</title>
-                    </ellipse>` : ''}
-                    
-                    <!-- Sudeste Asiático -->
-                    ${threatIntensity['SG'] ? `
-                    <circle cx="1490" cy="210" r="15" fill="${getCountryColor('SG')}" opacity="0.6">
-                        <title>SG (Singapore): ${threatIntensity['SG']} amenazas</title>
-                    </circle>` : ''}
-                    
-                    ${threatIntensity['VG'] ? `
-                    <circle cx="590" cy="60" r="12" fill="${getCountryColor('VG')}" opacity="0.6">
-                        <title>VG (British Virgin Islands): ${threatIntensity['VG']} amenazas</title>
-                    </circle>` : ''}
-                </svg>
+
+    const getPointColor = (intensity) => {
+        if (intensity > 0.7) return '#ef4444';
+        if (intensity > 0.4) return '#f59e0b';
+        if (intensity > 0.2) return '#fbbf24';
+        return '#10b981';
+    };
+
+    const pointsData = threats
+        .map(([country, count]) => {
+            const code = countryMapping[country] || country;
+            const coords = countryCoords[code];
+            if (!coords) return null;
+            const name = countryNames[code] || country;
+            return { lat: coords.lat, lng: coords.lng, count, code, name };
+        })
+        .filter(Boolean);
+
+    // Build the bars HTML separately (rendered after globe mount)
+    const barsHTML = `
+        <div style="margin-top: var(--space-6); padding: 0 var(--space-2);">
+            <div style="display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-4); padding: var(--space-3); background: var(--bg-tertiary); border-radius: var(--radius-md); flex-wrap: wrap;">
+                <span style="color: var(--text-primary); font-weight: 600; font-size: 0.9rem;">Intensidad:</span>
+                ${[['#10b981','Baja'],['#fbbf24','Media'],['#f59e0b','Alta'],['ef4444','Crítica']].map(([c,l]) => `
+                <div style="display:flex;align-items:center;gap:var(--space-2);">
+                    <div style="width:24px;height:12px;background:${c.startsWith('#') ? c : '#'+c};border-radius:3px;"></div>
+                    <span style="color:var(--text-secondary);font-size:0.85rem;">${l}</span>
+                </div>`).join('')}
             </div>
-        </div>
-        <!-- Leyenda de intensidad fuera del contenedor del mapa -->
-        <div style="display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-6); padding: var(--space-3); background: var(--bg-tertiary); border-radius: var(--radius-md); flex-wrap: wrap;">
-            <span style="color: var(--text-primary); font-weight: 600; font-size: 0.9rem;">Intensidad de Amenazas:</span>
-            <div style="display: flex; align-items: center; gap: var(--space-2);">
-                <div style="width: 24px; height: 12px; background: #10b981; border-radius: 3px;"></div>
-                <span style="color: var(--text-secondary); font-size: 0.85rem;">Baja</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: var(--space-2);">
-                <div style="width: 24px; height: 12px; background: #fbbf24; border-radius: 3px;"></div>
-                <span style="color: var(--text-secondary); font-size: 0.85rem;">Media</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: var(--space-2);">
-                <div style="width: 24px; height: 12px; background: #f59e0b; border-radius: 3px;"></div>
-                <span style="color: var(--text-secondary); font-size: 0.85rem;">Alta</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: var(--space-2);">
-                <div style="width: 24px; height: 12px; background: #ef4444; border-radius: 3px;"></div>
-                <span style="color: var(--text-secondary); font-size: 0.85rem;">Crítica</span>
-            </div>
-        </div>
-    `;
-    
-    // Crear el HTML con el mapa y las barras
-    container.innerHTML = worldMapSVG + `
-        <div style="margin-top: var(--space-4);">
             <h4 style="color: var(--text-primary); margin-bottom: var(--space-4); font-size: 0.95rem; font-weight: 600;">📊 Distribución por País</h4>
             ${threats.map(([country, count]) => {
-                const countryCode = countryMapping[country] || country;
-                const countryFullName = countryNames[countryCode] || country;
-                const displayName = countryCode !== country ? country : `${countryCode} (${countryFullName})`;
+                const code = countryMapping[country] || country;
+                const name = countryNames[code] || country;
+                const display = code !== country ? country : `${code} (${name})`;
                 return `
                 <div class="threat-bar">
-                    <div class="threat-country">${displayName}</div>
+                    <div class="threat-country">${display}</div>
                     <div class="threat-bar-container">
                         <div class="threat-bar-fill" style="width: ${(count / maxCount) * 100}%"></div>
                     </div>
                     <div class="threat-count">${count} amenaza${count > 1 ? 's' : ''}</div>
-                </div>
-                `;
+                </div>`;
             }).join('')}
         </div>
     `;
+
+    if (globeReactRoot) { try { globeReactRoot.unmount(); } catch(e) {} globeReactRoot = null; }
+
+    container.innerHTML = `<div id="globeMount" style="width:100%;height:620px;"></div>` + barsHTML;
+
+    const GlobeComponent = window.Globe;
+
+    if (!GlobeComponent || !window.React || !window.ReactDOM) {
+        const mountEl = document.getElementById('globeMount');
+        if (mountEl) mountEl.innerHTML = `<p style="color:var(--text-secondary);padding:var(--space-4);text-align:center;">El globo 3D no pudo cargarse. Revisa la conexión a internet.</p>`;
+        return;
+    }
+
+    requestAnimationFrame(() => {
+        const mountEl = document.getElementById('globeMount');
+        if (!mountEl) return;
+
+        const width = mountEl.getBoundingClientRect().width || 600;
+
+        const globeEl = React.createElement(GlobeComponent, {
+            width,
+            height: 620,
+            pointsData,
+            pointLat: 'lat',
+            pointLng: 'lng',
+            pointColor: d => getPointColor(d.count / maxCount),
+            pointAltitude: d => (d.count / maxCount) * 0.45 + 0.05,
+            pointRadius: d => Math.sqrt(d.count / maxCount) * 2.5 + 0.4,
+            pointLabel: d => `<div style="background:rgba(15,23,42,0.85);padding:6px 10px;border-radius:6px;font-family:Inter,sans-serif;font-size:13px;color:#f1f5f9;border:1px solid rgba(255,255,255,0.1);"><b>${d.name} (${d.code})</b><br/>${d.count} amenaza${d.count > 1 ? 's' : ''}</div>`,
+            globeImageUrl: 'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-dark.jpg',
+            backgroundImageUrl: 'https://cdn.jsdelivr.net/npm/three-globe/example/img/night-sky.png',
+            atmosphereColor: '#3b82f6',
+            atmosphereAltitude: 0.18,
+            animateIn: true,
+        });
+
+        globeReactRoot = ReactDOM.createRoot(mountEl);
+        globeReactRoot.render(globeEl);
+    });
 }
 
 function renderRecentSearches(searches) {
@@ -2080,4 +1987,111 @@ if (terminalCloseBtn) {
     terminalCloseBtn.addEventListener('click', () => {
         hideProgressTerminal();
     });
+}
+
+// ── AbuseIPDB Report Modal ──────────────────────────────────────────────────
+
+function openReportModal(ip) {
+    const modal = document.getElementById('reportModal');
+    const ipLabel = document.getElementById('reportModalIp');
+    const feedback = document.getElementById('reportFeedback');
+    const comment = document.getElementById('reportComment');
+    const counter = document.getElementById('reportCommentCount');
+
+    if (!modal) return;
+
+    // Reset state
+    ipLabel.textContent = ip;
+    comment.value = '';
+    counter.textContent = '0';
+    feedback.style.display = 'none';
+    feedback.innerHTML = '';
+    document.querySelectorAll('#reportCategories input[type="checkbox"]').forEach(cb => { cb.checked = false; });
+    document.getElementById('submitReportBtn').disabled = false;
+
+    modal.dataset.ip = ip;
+    modal.style.display = 'flex';
+}
+
+function closeReportModal() {
+    const modal = document.getElementById('reportModal');
+    if (modal) modal.style.display = 'none';
+}
+
+// Character counter for comment
+document.addEventListener('DOMContentLoaded', () => {
+    const comment = document.getElementById('reportComment');
+    const counter = document.getElementById('reportCommentCount');
+    if (comment && counter) {
+        comment.addEventListener('input', () => { counter.textContent = comment.value.length; });
+    }
+
+    document.getElementById('closeReportModal')?.addEventListener('click', closeReportModal);
+    document.getElementById('cancelReportBtn')?.addEventListener('click', closeReportModal);
+
+    document.getElementById('reportModal')?.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) closeReportModal();
+    });
+
+    document.getElementById('submitReportBtn')?.addEventListener('click', submitAbuseReport);
+});
+
+async function submitAbuseReport() {
+    const modal = document.getElementById('reportModal');
+    const ip = modal?.dataset.ip;
+    const feedback = document.getElementById('reportFeedback');
+    const submitBtn = document.getElementById('submitReportBtn');
+
+    const selectedCategories = Array.from(
+        document.querySelectorAll('#reportCategories input[type="checkbox"]:checked')
+    ).map(cb => parseInt(cb.value));
+
+    const comment = document.getElementById('reportComment').value.trim();
+
+    // Client-side validation
+    if (!selectedCategories.length) {
+        showReportFeedback('error', 'Selecciona al menos una categoría de abuso.');
+        return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Enviando…';
+
+    try {
+        const response = await fetch('/api/report-ip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ip, categories: selectedCategories, comment })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            showReportFeedback(
+                'success',
+                `✅ ${result.message} (Confidence score actual: ${result.abuse_confidence}%)`
+            );
+            submitBtn.style.display = 'none';
+        } else {
+            showReportFeedback('error', `❌ ${result.error || 'Error al enviar el reporte.'}`);
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Enviar reporte';
+        }
+    } catch (err) {
+        showReportFeedback('error', `❌ Error de red: ${err.message}`);
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Enviar reporte';
+    }
+}
+
+function showReportFeedback(type, message) {
+    const feedback = document.getElementById('reportFeedback');
+    if (!feedback) return;
+    const colors = {
+        success: { bg: 'rgba(34,197,94,0.1)', border: '#22c55e', text: '#22c55e' },
+        error:   { bg: 'rgba(239,68,68,0.1)',  border: '#ef4444', text: '#ef4444' }
+    };
+    const c = colors[type] || colors.error;
+    feedback.style.cssText = `display:block; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: ${c.bg}; border: 1px solid ${c.border}; color: ${c.text}; font-size: 0.875rem;`;
+    feedback.textContent = message;
 }

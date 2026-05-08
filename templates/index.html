@@ -671,7 +671,7 @@
                 <!-- Threat Map -->
                 <div class="chart-card" style="margin-bottom: var(--space-8);">
                     <h3>🌍 Mapa de Amenazas por País</h3>
-                    <div id="threatMap" style="max-height: 400px; overflow-y: auto;">
+                    <div id="threatMap">
                         <div id="threatMapContent"></div>
                     </div>
                 </div>
@@ -919,6 +919,83 @@
         </div>
     </main>
 
-    <script src="/static/dashboard-script.js?v=2.16"></script>
+    <!-- AbuseIPDB Report Modal -->
+    <div id="reportModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 640px;">
+            <div class="modal-header">
+                <h2>Reportar IP a AbuseIPDB</h2>
+                <button class="modal-close" id="closeReportModal">
+                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p style="color: var(--text-secondary); margin-bottom: var(--space-4);">
+                    IP: <strong id="reportModalIp" style="color: var(--text-primary); font-family: monospace;"></strong>
+                </p>
+
+                <div style="margin-bottom: var(--space-5);">
+                    <label style="font-weight: 600; color: var(--text-primary); display: block; margin-bottom: var(--space-3);">
+                        Categorías de abuso <span style="color: #ef4444;">*</span>
+                    </label>
+                    <div id="reportCategories" style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2);">
+                        <label class="report-cat-label"><input type="checkbox" value="1"> DNS Compromise</label>
+                        <label class="report-cat-label"><input type="checkbox" value="2"> DNS Poisoning</label>
+                        <label class="report-cat-label"><input type="checkbox" value="3"> Fraud Orders</label>
+                        <label class="report-cat-label"><input type="checkbox" value="4"> DDoS Attack</label>
+                        <label class="report-cat-label"><input type="checkbox" value="5"> FTP Brute-Force</label>
+                        <label class="report-cat-label"><input type="checkbox" value="6"> Ping of Death</label>
+                        <label class="report-cat-label"><input type="checkbox" value="7"> Phishing</label>
+                        <label class="report-cat-label"><input type="checkbox" value="8"> Fraud VoIP</label>
+                        <label class="report-cat-label"><input type="checkbox" value="9"> Open Proxy</label>
+                        <label class="report-cat-label"><input type="checkbox" value="10"> Web Spam</label>
+                        <label class="report-cat-label"><input type="checkbox" value="11"> Email Spam</label>
+                        <label class="report-cat-label"><input type="checkbox" value="12"> Blog Spam</label>
+                        <label class="report-cat-label"><input type="checkbox" value="13"> VPN IP</label>
+                        <label class="report-cat-label"><input type="checkbox" value="14"> Port Scan</label>
+                        <label class="report-cat-label"><input type="checkbox" value="15"> Hacking</label>
+                        <label class="report-cat-label"><input type="checkbox" value="16"> SQL Injection</label>
+                        <label class="report-cat-label"><input type="checkbox" value="17"> Spoofing</label>
+                        <label class="report-cat-label"><input type="checkbox" value="18"> Brute-Force</label>
+                        <label class="report-cat-label"><input type="checkbox" value="19"> Bad Web Bot</label>
+                        <label class="report-cat-label"><input type="checkbox" value="20"> Exploited Host</label>
+                        <label class="report-cat-label"><input type="checkbox" value="21"> Web App Attack</label>
+                        <label class="report-cat-label"><input type="checkbox" value="22"> SSH</label>
+                        <label class="report-cat-label"><input type="checkbox" value="23"> IoT Targeted</label>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: var(--space-5);">
+                    <label for="reportComment" style="font-weight: 600; color: var(--text-primary); display: block; margin-bottom: var(--space-2);">
+                        Comentario <span style="color: var(--text-secondary); font-weight: 400;">(opcional, máx. 1024 caracteres)</span>
+                    </label>
+                    <textarea id="reportComment" maxlength="1024" rows="4"
+                        placeholder="Describe el comportamiento malicioso observado (logs, fechas, puertos, etc.)"
+                        style="width: 100%; background: var(--bg-primary); border: 1px solid var(--border-primary); border-radius: var(--radius-md); color: var(--text-primary); padding: var(--space-3); font-family: inherit; font-size: 0.875rem; resize: vertical; outline: none;"></textarea>
+                    <div style="text-align: right; font-size: 0.75rem; color: var(--text-secondary); margin-top: var(--space-1);">
+                        <span id="reportCommentCount">0</span>/1024
+                    </div>
+                </div>
+
+                <div id="reportFeedback" style="display: none; margin-bottom: var(--space-4);"></div>
+
+                <div style="display: flex; gap: var(--space-3); justify-content: flex-end;">
+                    <button class="btn btn-secondary" id="cancelReportBtn">Cancelar</button>
+                    <button class="btn" id="submitReportBtn" style="background: #ef4444; border-color: #ef4444;">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin-right: var(--space-2);">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                        Enviar reporte
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-globe.gl/dist/react-globe.gl.min.js"></script>
+    <script src="/static/dashboard-script.js?v=2.20"></script>
 </body>
 </html>

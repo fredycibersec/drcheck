@@ -993,11 +993,15 @@ body[data-theme="light"] .side-panel-hash {
     font-weight: 600;
 }
 
-.chart-card canvas {
+.chart-card > canvas {
     min-height: 300px;
     max-height: 400px;
     width: 100% !important;
     height: auto !important;
+}
+
+#globeMount canvas {
+    display: block;
 }
 
 .threat-bar {
@@ -1594,5 +1598,44 @@ body[data-theme="light"] .side-panel-hash {
     }
     70% {
         transform: scale(1);
+    }
+}
+
+/* AbuseIPDB Report Modal */
+.report-cat-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.report-cat-label:hover {
+    border-color: var(--text-primary);
+    color: var(--text-primary);
+}
+
+.report-cat-label input[type="checkbox"] {
+    accent-color: #ef4444;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+.report-cat-label:has(input:checked) {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.08);
+    color: var(--text-primary);
+}
+
+@media (max-width: 600px) {
+    #reportCategories {
+        grid-template-columns: 1fr;
     }
 }

@@ -1,0 +1,41 @@
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+flask-app.env
+
+# Encrypted API key storage
+config/
+config/api_keys.enc
+config/.api_encryption_key
+
+# Logs
+logs/
+*.log
+
+# User data generated at runtime
+stats.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
