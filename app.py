@@ -530,7 +530,8 @@ def add_search_stat(search_type, target, reputation, country=None):
     
     # Update summary
     stats['summary']['total'] += 1
-    stats['summary'][f"{search_type}s"] = stats['summary'].get(f"{search_type}s", 0) + 1
+    summary_key = 'hashes' if search_type == 'hash' else f"{search_type}s"
+    stats['summary'][summary_key] = stats['summary'].get(summary_key, 0) + 1
     
     if reputation in ['malicious', 'suspicious', 'clean']:
         stats['summary'][reputation] = stats['summary'].get(reputation, 0) + 1
