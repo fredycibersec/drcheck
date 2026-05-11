@@ -33,6 +33,8 @@
 - ✅ Detección de proxies, VPN y nodos Tor
 - ✅ Clasificación automática: Maliciosa, Sospechosa o Limpia
 - ✅ **Reporte directo a AbuseIPDB** con selección de categorías y comentario
+- ✅ **Integración Shodan** - puertos abiertos, servicios con versión, CVEs, tags, hostnames y certificados SSL
+- ✅ **Botón "Ver en Shodan"** para ampliar información directamente en shodan.io
 
 ### 🚨 Reporte de IPs Maliciosas
 - ✅ Botón **"Reportar a AbuseIPDB"** integrado en los resultados de IP
@@ -135,6 +137,9 @@ Abre tu navegador en `http://localhost:5000` 🎉
 
 - **APIVoid (URLVoid):** [https://www.apivoid.com/](https://www.apivoid.com/) - `APIVOID_KEY`
 - **Shodan:** [https://account.shodan.io/](https://account.shodan.io/) - `SHODAN_API_KEY`
+  - Muestra puertos abiertos con servicio y versión, vulnerabilidades CVE, tags (cloud/vpn/tor/honeypot), hostnames, certificado SSL y geolocalización
+  - Compatible con el plan gratuito (dev) y planes de pago — detecta automáticamente si la cuenta requiere HTTP o HTTPS
+  - No consume query credits (usa el endpoint `/shodan/host/{ip}`)
 - **SecurityTrails:** [https://securitytrails.com/](https://securitytrails.com/) - `SECURITYTRAILS_API_KEY`
 
 ### APIs Tier 4 (Complementarias)
@@ -189,10 +194,10 @@ El servicio carga las API keys de forma segura desde un archivo de entorno con p
 2. Ingresar la dirección IP (ej: `8.8.8.8`)
 3. Ver resultados con:
    - Clasificación (Limpia/Sospechosa/Maliciosa)
-   - Geolocalización
-   - ASN y proveedor
-   - Listas negras detectadas
-   - Puertos abiertos (si disponible)
+   - Geolocalización, ASN y proveedor
+   - Listas negras detectadas (30+ fuentes)
+   - **Shodan** (si configurado): puertos abiertos con servicio/versión, CVEs, tags, hostnames, certificado SSL
+   - Botón **"Ver en Shodan"** (naranja) para ver el perfil completo del host
 
 ### Reportar una IP a AbuseIPDB
 1. Analizar la IP sospechosa
@@ -354,6 +359,7 @@ Herramienta desarrollada para investigaciones OSINT y análisis de seguridad.
 - VirusTotal por su API pública
 - Abuse.ch por MalwareBazaar y ThreatFox
 - AbuseIPDB por la detección y reporte de IPs maliciosas
+- Shodan por su API de servicios expuestos e inteligencia de red
 - NetworksDB.io por la información de redes y organizaciones
 - La comunidad OSINT por las mejores prácticas
 - Chart.js por las visualizaciones
