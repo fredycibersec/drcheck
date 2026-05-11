@@ -3,63 +3,129 @@
 # Domain Reputation WebApp - Service Installation Script
 # Installs the application as a systemd service
 
-set -e  # Exit on error
+SERVICE_NAME="domain-reputation-webapp"
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+PORT=5000
 
-echo "🔍 Domain Reputation WebApp - Service Installer"
-echo "================================================"
-echo ""
-
-# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Check if running as root
-if [ "$EUID" -ne 0 ]; then 
-    echo -e "${RED}❌ This script must be run as root (use sudo)${NC}"
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+ok()   { echo -e "${GREEN}✅ $*${NC}"; }
+warn() { echo -e "${YELLOW}⚠️  $*${NC}"; }
+err()  { echo -e "${RED}❌ $*${NC}"; }
+info() { echo -e "${BLUE}ℹ️  $*${NC}"; }
+
+# ── uninstall mode ────────────────────────────────────────────────────────────
+
+uninstall() {
+    echo ""
+    echo -e "${YELLOW}Uninstalling ${SERVICE_NAME}...${NC}"
+    echo ""
+
+    if ! systemctl list-unit-files "${SERVICE_NAME}.service" &>/dev/null; then
+        warn "Service not found, nothing to uninstall."
+        exit 0
+    fi
+
+    systemctl stop    "${SERVICE_NAME}.service" 2>/dev/null && ok "Service stopped"   || true
+    systemctl disable "${SERVICE_NAME}.service" 2>/dev/null && ok "Service disabled"  || true
+
+    if [ -f "$SERVICE_FILE" ]; then
+        rm "$SERVICE_FILE"
+        systemctl daemon-reload
+        ok "Service file removed"
+    fi
+
+    echo ""
+    ok "Uninstall complete."
+    exit 0
+}
+
+if [[ "$1" == "--uninstall" ]]; then
+    if [ "$EUID" -ne 0 ]; then err "Run with sudo to uninstall."; exit 1; fi
+    uninstall
+fi
+
+# ── install mode ──────────────────────────────────────────────────────────────
+
+echo ""
+echo "🔍 Domain Reputation WebApp — Service Installer"
+echo "================================================"
+echo ""
+
+# Must run via sudo (not directly as root)
+if [ "$EUID" -ne 0 ]; then
+    err "This script must be run with sudo."
     exit 1
 fi
 
-# Get real user (not root)
 REAL_USER="${SUDO_USER:-$USER}"
 if [ "$REAL_USER" = "root" ]; then
-    echo -e "${RED}❌ Please run this script with sudo, not as root directly${NC}"
+    err "Please run with sudo, not as root directly."
     exit 1
 fi
 
-# Get script directory
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-REAL_HOME=$(eval echo ~$REAL_USER)
 
-echo "📁 Project directory: $PROJECT_DIR"
-echo "👤 Running as user: $REAL_USER"
-echo "🏠 Home directory: $REAL_HOME"
+echo "  Project : $PROJECT_DIR"
+echo "  User    : $REAL_USER"
+echo "  Port    : $PORT"
 echo ""
 
-# Check if .env exists
-if [ ! -f "$PROJECT_DIR/.env" ]; then
-    echo -e "${YELLOW}⚠️  Warning: .env file not found${NC}"
-    echo "The service will look for environment variables in flask-app.env"
+# 1 ── venv check ─────────────────────────────────────────────────────────────
+if [ ! -f "$PROJECT_DIR/venv/bin/python3" ]; then
+    err "Virtual environment not found at $PROJECT_DIR/venv/"
+    echo ""
+    echo "  Run setup first:"
+    echo "    bash $PROJECT_DIR/scripts/setup.sh"
+    echo ""
+    exit 1
 fi
+ok "Virtual environment found"
 
-# Create flask-app.env from .env if it exists
+# 2 ── .env check ─────────────────────────────────────────────────────────────
+ENV_FILE=""
 if [ -f "$PROJECT_DIR/.env" ]; then
-    echo "📝 Creating flask-app.env from .env..."
-    cp "$PROJECT_DIR/.env" "$PROJECT_DIR/flask-app.env"
-    chown $REAL_USER:$REAL_USER "$PROJECT_DIR/flask-app.env"
-    chmod 600 "$PROJECT_DIR/flask-app.env"
-    echo -e "${GREEN}✅ flask-app.env created${NC}"
+    ENV_FILE="$PROJECT_DIR/.env"
+    ok ".env file found"
 else
-    echo -e "${YELLOW}⚠️  Please create flask-app.env manually with your API keys${NC}"
+    warn ".env not found — service will start without API keys."
+    echo "     Configure keys later via the web UI (http://localhost:${PORT})."
 fi
 
-# Create systemd service file
-SERVICE_FILE="/etc/systemd/system/domain-reputation-webapp.service"
+# 3 ── port availability check ────────────────────────────────────────────────
+if ss -tlnp 2>/dev/null | grep -q ":${PORT} " || lsof -i ":${PORT}" &>/dev/null 2>&1; then
+    warn "Port ${PORT} is already in use."
+    OWNER=$(ss -tlnp 2>/dev/null | grep ":${PORT} " | grep -oP 'pid=\K[0-9]+' | head -1)
+    [ -n "$OWNER" ] && info "Held by PID $OWNER ($(cat /proc/$OWNER/comm 2>/dev/null || echo unknown))"
+    echo ""
+    read -r -p "  Continue anyway? The service will fail until port is free. [y/N] " REPLY
+    [[ "$REPLY" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
+fi
 
+# 4 ── existing service check ─────────────────────────────────────────────────
+if [ -f "$SERVICE_FILE" ]; then
+    warn "Service already installed at $SERVICE_FILE"
+    echo ""
+    read -r -p "  Overwrite and reinstall? [y/N] " REPLY
+    [[ "$REPLY" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
+    echo ""
+    systemctl stop "${SERVICE_NAME}.service" 2>/dev/null || true
+fi
+
+# 5 ── write service file ──────────────────────────────────────────────────────
 echo ""
-echo "📄 Creating systemd service file..."
+info "Creating systemd service file..."
+
+# Build EnvironmentFile line only when .env exists
+ENV_LINE=""
+[ -n "$ENV_FILE" ] && ENV_LINE="EnvironmentFile=${ENV_FILE}"
 
 cat > "$SERVICE_FILE" << EOF
 [Unit]
@@ -68,10 +134,10 @@ After=network.target
 
 [Service]
 Type=simple
-User=$REAL_USER
-WorkingDirectory=$PROJECT_DIR
-EnvironmentFile=$PROJECT_DIR/flask-app.env
-ExecStart=$PROJECT_DIR/venv/bin/python3 app.py
+User=${REAL_USER}
+WorkingDirectory=${PROJECT_DIR}
+${ENV_LINE}
+ExecStart=${PROJECT_DIR}/venv/bin/python3 app.py
 Restart=on-failure
 RestartSec=5
 
@@ -79,48 +145,53 @@ RestartSec=5
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=$PROJECT_DIR
+ReadWritePaths=${PROJECT_DIR}
 ProtectHome=read-only
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-echo -e "${GREEN}✅ Service file created at $SERVICE_FILE${NC}"
+ok "Service file created: $SERVICE_FILE"
 
-# Reload systemd
+# 6 ── enable & start ──────────────────────────────────────────────────────────
 echo ""
-echo "🔄 Reloading systemd daemon..."
+info "Reloading systemd daemon..."
 systemctl daemon-reload
-echo -e "${GREEN}✅ Systemd reloaded${NC}"
 
-# Enable service
+info "Enabling service..."
+systemctl enable "${SERVICE_NAME}.service"
+
+info "Starting service..."
+systemctl start "${SERVICE_NAME}.service"
+
+# 7 ── verify startup ──────────────────────────────────────────────────────────
 echo ""
-echo "🔧 Enabling service..."
-systemctl enable domain-reputation-webapp.service
-echo -e "${GREEN}✅ Service enabled${NC}"
+info "Waiting for service to stabilise..."
+sleep 3
 
-# Start service
-echo ""
-echo "🚀 Starting service..."
-systemctl start domain-reputation-webapp.service
-sleep 2
+if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
+    ok "Service is running on http://localhost:${PORT}"
+else
+    err "Service failed to start. Last journal entries:"
+    echo ""
+    journalctl -u "${SERVICE_NAME}.service" -n 20 --no-pager
+    echo ""
+    err "Fix the issue above, then run: sudo systemctl start ${SERVICE_NAME}"
+    exit 1
+fi
 
-# Check status
-echo ""
-echo "📊 Service status:"
-systemctl status domain-reputation-webapp.service --no-pager || true
-
+# ── summary ───────────────────────────────────────────────────────────────────
 echo ""
 echo "================================================"
-echo -e "${GREEN}🎉 Service installation completed!${NC}"
+ok "Installation complete!"
 echo ""
-echo "Useful commands:"
-echo "  • View status:    sudo systemctl status domain-reputation-webapp"
-echo "  • Restart:        sudo systemctl restart domain-reputation-webapp"
-echo "  • Stop:           sudo systemctl stop domain-reputation-webapp"
-echo "  • View logs:      sudo journalctl -u domain-reputation-webapp -f"
-echo "  • Disable:        sudo systemctl disable domain-reputation-webapp"
+echo "  • Status  : sudo systemctl status  ${SERVICE_NAME}"
+echo "  • Restart : sudo systemctl restart ${SERVICE_NAME}"
+echo "  • Stop    : sudo systemctl stop    ${SERVICE_NAME}"
+echo "  • Logs    : sudo journalctl -u ${SERVICE_NAME} -f"
+echo "  • Remove  : sudo bash scripts/install-service.sh --uninstall"
 echo ""
-echo "Access the application at: http://localhost:5000"
+echo "  Access: http://localhost:${PORT}"
 echo "================================================"
+echo ""
