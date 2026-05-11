@@ -849,7 +849,12 @@ function createSourceCard(result) {
     }
     
     const messageHTML = result.message ? `<p style="color: var(--text-secondary); margin-top: var(--space-2);">${result.message}</p>` : '';
-    const linkHTML = result.url ? `<a href="${result.url}" target="_blank" style="display: inline-block; margin-top: var(--space-4); padding: var(--space-2) var(--space-4); background: transparent; color: var(--text-primary); text-decoration: none; border: 1px solid var(--border-primary); border-radius: var(--radius-md);">🔗 Ver Fuente</a>` : '';
+    const isShodan = result.source_id === 'shodan' || (result.source || '').toLowerCase().includes('shodan');
+    const linkLabel = isShodan ? '🔍 Ver en Shodan' : '🔗 Ver Fuente';
+    const linkStyle = isShodan
+        ? 'display:inline-block;margin-top:var(--space-4);padding:var(--space-2) var(--space-4);background:#d63e00;color:#fff;text-decoration:none;border-radius:var(--radius-md);font-weight:600;'
+        : 'display:inline-block;margin-top:var(--space-4);padding:var(--space-2) var(--space-4);background:transparent;color:var(--text-primary);text-decoration:none;border:1px solid var(--border-primary);border-radius:var(--radius-md);';
+    const linkHTML = result.url ? `<a href="${result.url}" target="_blank" rel="noopener noreferrer" style="${linkStyle}">${linkLabel}</a>` : '';
     
     card.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4); padding-bottom: var(--space-3); border-bottom: 2px solid var(--border-primary);">

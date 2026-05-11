@@ -93,6 +93,10 @@ def get_checker():
         api_keys = get_api_keys()
         if api_keys:
             checker.api_keys.update(api_keys)
+            # Recompute available_sources after injecting keys, since _check_api_availability
+            # ran at __init__ time before keys were loaded and would have excluded API-gated
+            # sources like Shodan even when a key is configured.
+            checker.available_sources = checker._check_api_availability()
             app.logger.info(f'Loaded {len(api_keys)} API keys from config/environment')
     
     return checker
@@ -619,9 +623,16 @@ def check_domain():
         return jsonify({'error': 'Domain reputation checker not available'}), 500
     
     try:
+        # Refresh API keys and available_sources on every check so that keys
+        # configured after startup (e.g. Shodan added via the web UI) take effect.
+        _current_keys = get_api_keys()
+        if _current_keys:
+            checker_instance.api_keys.update(_current_keys)
+            checker_instance.available_sources = checker_instance._check_api_availability()
+
         # Reset results for new check
         checker_instance.results = {}
-        
+
         # Determine if it's a hash or domain BEFORE analysis
         is_hash = re.match(r'^[a-f0-9]{32}$|^[a-f0-9]{40}$|^[a-f0-9]{64}$', domain)
         
@@ -1312,8 +1323,128 @@ def check_ip():
                     'message': 'Check failed'
                 }
         
-        # NetworksDB Check
+        # Shodan IP Check
         api_keys = get_api_keys()
+        if api_keys.get('shodan'):
+            try:
+                import requests as _req
+                shodan_key = api_keys['shodan']
+                try:
+                    info_resp = _req.get(
+                        f"https://api.shodan.io/api-info?key={shodan_key}", timeout=5
+                    )
+                    scheme = "https" if info_resp.json().get("https", False) else "http"
+                except Exception:
+                    scheme = "https"
+
+                shodan_resp = _req.get(
+                    f"{scheme}://api.shodan.io/shodan/host/{ip_address}?key={shodan_key}",
+                    timeout=15,
+                    verify=(scheme == "https")
+                )
+                if shodan_resp.status_code == 200:
+                    sd = shodan_resp.json()
+
+                    # Build services list: "80/tcp (Apache httpd 2.4.51)"
+                    services = []
+                    for entry in sd.get('data', []):
+                        port = entry.get('port', '')
+                        transport = entry.get('transport', 'tcp')
+                        product = entry.get('product', '')
+                        version = entry.get('version', '')
+                        module = entry.get('_shodan', {}).get('module', '')
+                        label = product or module or ''
+                        if version:
+                            label = f"{label} {version}".strip()
+                        svc = f"{port}/{transport}"
+                        if label:
+                            svc += f" ({label})"
+                        services.append(svc)
+
+                    open_ports = sorted({e.get('port', 0) for e in sd.get('data', [])})
+                    vulns = list(sd.get('vulns', {}).keys())
+                    tags = sd.get('tags', [])
+                    hostnames = sd.get('hostnames', [])
+                    domains_found = sd.get('domains', [])
+                    location_parts = [p for p in [sd.get('city'), sd.get('region_code'), sd.get('country_name')] if p]
+
+                    ssl_info = ''
+                    for entry in sd.get('data', []):
+                        if 'ssl' in entry:
+                            cert = entry['ssl'].get('cert', {})
+                            cn = cert.get('subject', {}).get('CN', '')
+                            expires = cert.get('expires', '')
+                            if cn:
+                                ssl_info = cn + (f' (exp: {expires})' if expires else '')
+                            break
+
+                    suspicious_set = {21, 22, 23, 25, 135, 139, 445, 1433, 3306, 3389, 5900, 6379, 27017}
+                    suspicious_count = len(set(open_ports).intersection(suspicious_set))
+
+                    if vulns or suspicious_count > 3 or 'honeypot' in tags:
+                        sd_rep = 'suspicious'
+                        overall_score -= 2
+                    elif suspicious_count > 0 or tags:
+                        sd_rep = 'questionable'
+                        overall_score -= 1
+                    else:
+                        sd_rep = 'clean'
+                        overall_score += 0.5
+                    scores_count += 1
+
+                    details = {}
+                    if sd.get('org'):
+                        details['organization'] = sd['org']
+                    if sd.get('isp') and sd.get('isp') != sd.get('org'):
+                        details['isp'] = sd['isp']
+                    if sd.get('asn'):
+                        details['asn'] = sd['asn']
+                    if location_parts:
+                        details['location'] = ', '.join(location_parts)
+                    if sd.get('os'):
+                        details['operating_system'] = sd['os']
+                    if open_ports:
+                        details['open_ports'] = open_ports
+                    if services:
+                        details['services'] = services
+                    if vulns:
+                        details['vulnerabilities'] = vulns
+                    if tags:
+                        details['tags'] = tags
+                    if hostnames:
+                        details['hostnames'] = hostnames[:10]
+                    if domains_found:
+                        details['domains'] = domains_found[:10]
+                    if ssl_info:
+                        details['ssl_certificate'] = ssl_info
+                    if sd.get('last_update'):
+                        details['last_update'] = sd['last_update']
+
+                    formatted_results['shodan'] = {
+                        'source': 'Shodan',
+                        'source_id': 'shodan',
+                        'status': 'success',
+                        'reputation': sd_rep,
+                        'details': details,
+                        'url': f"https://www.shodan.io/host/{ip_address}",
+                    }
+                elif shodan_resp.status_code == 404:
+                    formatted_results['shodan'] = {
+                        'source': 'Shodan', 'status': 'not_found',
+                        'message': 'No Shodan data for this IP'
+                    }
+                else:
+                    formatted_results['shodan'] = {
+                        'source': 'Shodan', 'status': 'error',
+                        'message': f'Shodan API error: HTTP {shodan_resp.status_code}'
+                    }
+            except Exception as e:
+                app.logger.error(f'Shodan IP check failed: {str(e)}')
+                formatted_results['shodan'] = {
+                    'source': 'Shodan', 'status': 'error', 'message': 'Check failed'
+                }
+
+        # NetworksDB Check
         if api_keys.get('networksdb'):
             try:
                 networksdb_result = check_networksdb_ip(ip_address, api_keys['networksdb'])
