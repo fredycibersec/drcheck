@@ -37,6 +37,13 @@ except ImportError as e:
     print(f"Warning: Could not import DomainReputationChecker: {e}")
     DomainReputationChecker = None
 
+# Load .env file if present (allows running without a startup script)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'), override=False)
+except ImportError:
+    pass
+
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 CORS(app)
 Compress(app)
