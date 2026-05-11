@@ -758,7 +758,13 @@ def check_domain():
                             continue  # Don't add raw categories dict
                         
                         formatted_result['details'][field] = value
-            
+
+                # If the CLI result already has a pre-built details dict (e.g. Shodan via
+                # _parse_shodan_host), merge it in — fields not already set take precedence.
+                for k, v in result.get('details', {}).items():
+                    if k not in formatted_result['details'] and v is not None and v != '' and not (isinstance(v, list) and len(v) == 0):
+                        formatted_result['details'][k] = v
+
             # Add investigation URL — use result's own URL or build one for hash sources
             if 'url' in result:
                 formatted_result['url'] = result['url']
