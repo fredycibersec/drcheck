@@ -680,20 +680,21 @@ def check_domain():
         # Use the hash detection from earlier
         search_type = 'hash' if is_hash else 'domain'
         
-        # Track statistics - get country from whois or IP resolution
-        country = results.get('whois_info', {}).get('country', None)
-        
-        # Resolve IP address for domains (not hashes)
+        # Track statistics - resolve IP first for consistent ISO country codes
+        country = None
         resolved_ip = None
         if search_type == 'domain':
             try:
                 import socket
                 resolved_ip = socket.gethostbyname(domain)
-                # Also get country from resolved IP if not from whois
-                if not country:
-                    country = get_country_from_ip(resolved_ip)
+                country = get_country_from_ip(resolved_ip)
             except:
                 pass
+        # Fallback: whois country only if IP lookup failed and it looks like ISO code
+        if not country:
+            whois_country = results.get('whois_info', {}).get('country', None)
+            if whois_country and len(str(whois_country).strip()) == 2:
+                country = str(whois_country).strip().upper()
         
         add_search_stat(search_type, domain, overall_reputation, country)
         

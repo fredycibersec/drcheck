@@ -1034,10 +1034,23 @@ function renderThreatMap(threats) {
     };
 
     const countryMapping = {
-        'US': 'US', 'CN': 'CN', 'RU': 'RU', 'DE': 'DE', 'GB': 'GB',
-        'FR': 'FR', 'JP': 'JP', 'IN': 'IN', 'BR': 'BR', 'CA': 'CA',
-        'United States': 'US', 'China': 'CN', 'Russia': 'RU', 'Germany': 'DE', 'United Kingdom': 'GB',
-        'France': 'FR', 'Japan': 'JP', 'India': 'IN', 'Brazil': 'BR', 'Canada': 'CA'
+        // ISO codes pass through
+        'US':'US','CN':'CN','RU':'RU','DE':'DE','GB':'GB','FR':'FR','JP':'JP','IN':'IN','BR':'BR','CA':'CA',
+        'AU':'AU','MX':'MX','IT':'IT','ES':'ES','KR':'KR','NL':'NL','SE':'SE','PL':'PL','TR':'TR','AR':'AR',
+        'SA':'SA','ZA':'ZA','EG':'EG','SG':'SG','VG':'VG','NZ':'NZ','CH':'CH','NO':'NO','DK':'DK','FI':'FI',
+        'BE':'BE','AT':'AT','PT':'PT','UA':'UA','IR':'IR','PK':'PK','VN':'VN','ID':'ID','TH':'TH','NG':'NG',
+        'HK':'HK','TW':'TW','CZ':'CZ','RO':'RO','HU':'HU','PH':'PH','MY':'MY','CO':'CO','CL':'CL','IL':'IL','AE':'AE',
+        // Full country names → ISO
+        'United States':'US','China':'CN','Russia':'RU','Germany':'DE','United Kingdom':'GB',
+        'France':'FR','Japan':'JP','India':'IN','Brazil':'BR','Canada':'CA','Australia':'AU',
+        'Mexico':'MX','Italy':'IT','Spain':'ES','South Korea':'KR','Netherlands':'NL',
+        'Sweden':'SE','Poland':'PL','Turkey':'TR','Argentina':'AR','Saudi Arabia':'SA',
+        'South Africa':'ZA','Egypt':'EG','Singapore':'SG','New Zealand':'NZ','Switzerland':'CH',
+        'Norway':'NO','Denmark':'DK','Finland':'FI','Belgium':'BE','Austria':'AT','Portugal':'PT',
+        'Ukraine':'UA','Iran':'IR','Pakistan':'PK','Vietnam':'VN','Indonesia':'ID','Thailand':'TH',
+        'Nigeria':'NG','Hong Kong':'HK','Taiwan':'TW','Czech Republic':'CZ','Romania':'RO',
+        'Hungary':'HU','Philippines':'PH','Malaysia':'MY','Colombia':'CO','Chile':'CL',
+        'Israel':'IL','United Arab Emirates':'AE'
     };
 
     const countryCoords = {
