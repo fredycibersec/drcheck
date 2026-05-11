@@ -546,8 +546,14 @@ def _parse_shodan_host(data, ip_address):
     open_ports = sorted({e.get('port', 0) for e in data.get('data', [])})
     suspicious_count = len(set(open_ports).intersection(suspicious_ports))
 
-    # Vulnerabilities
-    vulns = list(data.get('vulns', {}).keys())
+    # Vulnerabilities (Shodan returns dict or list depending on plan/version)
+    vulns_raw = data.get('vulns', {})
+    if isinstance(vulns_raw, dict):
+        vulns = list(vulns_raw.keys())
+    elif isinstance(vulns_raw, list):
+        vulns = vulns_raw
+    else:
+        vulns = []
 
     # Tags (cloud, vpn, tor, honeypot, self-signed, etc.)
     tags = data.get('tags', [])
