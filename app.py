@@ -1370,7 +1370,8 @@ def check_ip():
                         services.append(svc)
 
                     open_ports = sorted({e.get('port', 0) for e in sd.get('data', [])})
-                    vulns = list(sd.get('vulns', {}).keys())
+                    vulns_raw = sd.get('vulns', {})
+                    vulns = list(vulns_raw.keys()) if isinstance(vulns_raw, dict) else (vulns_raw if isinstance(vulns_raw, list) else [])
                     tags = sd.get('tags', [])
                     hostnames = sd.get('hostnames', [])
                     domains_found = sd.get('domains', [])
