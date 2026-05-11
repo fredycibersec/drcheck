@@ -641,7 +641,6 @@ function displayIPResults(data) {
 
     if (resultsGrid && data.results) {
         resultsGrid.innerHTML = '';
-        // data.results is an array, iterate directly
         data.results.forEach(result => {
             const card = createSourceCard(result);
             resultsGrid.appendChild(card);
@@ -822,8 +821,11 @@ function createSourceCard(result) {
             
             let displayValue;
             if (Array.isArray(value)) {
-                // Check if array contains objects
-                if (value.length > 0 && typeof value[0] === 'object' && value[0] !== null) {
+                if (key === 'malicious_indicators_found') {
+                    displayValue = value.map(ind => `<span style="background:#7b1c1c;color:#fca5a5;padding:1px 6px;border-radius:4px;font-size:0.85em;margin:1px;display:inline-block;">${ind}</span>`).join(' ');
+                } else if (key === 'suspicious_indicators_found') {
+                    displayValue = value.map(ind => `<span style="background:#78350f;color:#fcd34d;padding:1px 6px;border-radius:4px;font-size:0.85em;margin:1px;display:inline-block;">${ind}</span>`).join(' ');
+                } else if (value.length > 0 && typeof value[0] === 'object' && value[0] !== null) {
                     // Format array of objects (e.g., recent_attacks from AbuseIPDB)
                     displayValue = value.map(obj => {
                         const entries = Object.entries(obj)
@@ -1014,7 +1016,7 @@ function renderThreatMap(threats) {
         `;
         return;
     }
-
+    
     const maxCount = Math.max(...threats.map(t => t[1]));
 
     const countryNames = {

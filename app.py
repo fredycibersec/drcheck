@@ -721,7 +721,8 @@ def check_domain():
                     'ip_address', 'country', 'isp', 'age_years', 'age_days', 'age_risk',
                     'registrar', 'creation_date', 'scan_count', 'malicious_scans',
                     'suspicious_scans', 'analysis_count', 'malicious_indicators',
-                    'suspicious_indicators', 'threat_indicators', 'location',
+                    'malicious_indicators_found', 'suspicious_indicators',
+                    'suspicious_indicators_found', 'threat_indicators', 'location',
                     'open_ports', 'countries', 'additional_ips', 'geolocation_sources',
                     'services_used', 'ioc_type', 'hash_type', 'malware_detected',
                     'file_name', 'file_type', 'file_size', 'signature', 'tags', 
@@ -1215,7 +1216,7 @@ def check_ip():
         ip_address = str(parsed_ip)  # Normalize (expands/compresses IPv6)
     except ValueError:
         return jsonify({'error': 'Invalid IP address format'}), 400
-
+    
     try:
         # Get the checker instance with configured APIs
         checker_instance = get_checker()
